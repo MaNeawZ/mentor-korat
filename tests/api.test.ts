@@ -212,7 +212,7 @@ describe("HTTP trust boundaries", () => {
 });
 describe("migration guard", () => {
   it("checks all reviewed checksums", () =>
-    expect(reviewedMigrations()).toHaveLength(6));
+    expect(reviewedMigrations()).toHaveLength(7));
   it.each([
     "ALTER TABLE public.live ADD COLUMN bad text;",
     "DROP SCHEMA public CASCADE;",

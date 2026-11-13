@@ -19,7 +19,7 @@
 - [ ] พนักงานไม่มี Mentor สร้าง UNASSIGNED แยกจาก evidence status; หัวหน้าศูนย์ทั้งสองได้รับแจ้งเตือน
 - [ ] Mentor login คัดลอก secure link ส่งให้ employee โดยตรง
 - [ ] employee เปิดในมือถือโดยไม่ login เลือก Gallery/Camera, preview/change/remove/compress/upload
-- [ ] private storage ไม่มี anonymous read และ evidence endpoint ตรวจ RLS จริงใน shared project
+- [ ] รูปใหม่แนบ Discord โดยไม่เขียน Supabase Storage; evidence endpoint ตรวจ RLS ก่อน proxy และรูปเก่าจาก private Storage ยังอ่านได้
 - [ ] used/revoked/invalid link แสดงข้อความถูก; upload พร้อมกันสำเร็จเพียงหนึ่งรายการ
 - [ ] upload ล้มเหลวลองใหม่ได้; network ambiguity ไม่ลบหลักฐานที่ commit แล้ว
 - [ ] Mentor ขอรูปใหม่พร้อมเหตุผล; link เก่าใช้ไม่ได้; upload version ใหม่ยังเก็บประวัติเดิม
@@ -32,7 +32,8 @@
 - [ ] กระดิ่งและ list เฉพาะผู้มีสิทธิ์, unread/read/read-all และเปิด leave ที่เกี่ยวข้อง
 - [ ] webhook บันทึกใบลา/แจ้งเตือนเว็บผ่าน fast path ก่อนตอบ HTTP และส่ง Discord ต่อหลัง response โดยไม่รอรอบ schedule; หน้าเปิดตรวจ notification ทุก 5 วินาทีและ fallback refresh ทุก 60 วินาที วัดเวลาจริงหลัง deploy ก่อนรับประกัน latency
 - [ ] Discord private channel มีรายละเอียด/สถานะ/mention ผู้รับผิดชอบจริงและ protected link
-- [ ] ห้อง Discord จำกัดสมาชิก แนบ active upload link ให้ Mentor ส่งต่อเฉพาะสถานะรอหลักฐาน/ขอใหม่ และใช้ได้ครั้งเดียว ไม่มีรูปหลักฐานในห้อง; LINE text ทำให้ mention everyone ไม่ได้
+- [ ] ห้อง Discord จำกัดสมาชิกให้อ่านรูปหลักฐานและเหตุผลการลา แนบ active upload link ให้ Mentor ส่งต่อเฉพาะสถานะรอหลักฐาน/ขอใหม่และใช้ได้ครั้งเดียว; LINE text ทำให้ mention everyone ไม่ได้
+- [ ] Discord ส่งไฟล์ไม่สำเร็จ token ยัง ACTIVE; เปิดภาพผ่าน signed URL ที่ดึงใหม่ได้; ปุ่มล้างข้อมูลลบเฉพาะข้อความรูปที่บันทึก reference ไว้และ exact paths ของ Storage เก่า
 - [ ] โหมด edit เอาลิงก์ออกหลังอัปโหลด โหมด events แม้มีข้อความลิงก์เก่าค้างอยู่ token ที่ใช้แล้ว/ยกเลิกแล้วต้องใช้ไม่ได้
 - [ ] อัปโหลด/ตรวจขั้นต้น/ตรวจขั้นสุดท้าย/ขอใหม่/ปฏิเสธ แสดงสถานะล่าสุดใน Discord และส่งข้อความใหม่แท็ก Mentor ที่ผูก ID ไว้แม้ใช้โหมด edit; โหมด events ไม่ส่งข้อความแจ้งเพิ่มซ้ำ และไม่แจ้ง DONE หากข้อความใหม่ส่งไม่สำเร็จ
 - [ ] edit mode PATCH message เดิม; events mode แสดง status ของแต่ละ event

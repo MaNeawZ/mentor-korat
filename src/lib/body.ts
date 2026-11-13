@@ -1,6 +1,9 @@
 import { HttpError } from "./api";
 /** Bound memory even when a caller omits or spoofs Content-Length. */
-export async function limitedBody(request: Request, maxBytes: number) {
+export async function limitedBody(
+  request: Pick<Request, "body">,
+  maxBytes: number,
+) {
   const reader = request.body?.getReader();
   if (!reader) return new Uint8Array();
   const chunks: Uint8Array[] = [];

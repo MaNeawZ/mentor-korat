@@ -14,7 +14,7 @@ Copy-Item .env.example .env.local
 # ใส่ค่า environment ใน .env.local ตามคำอธิบายด้านล่าง
 node --env-file=.env.local scripts/migrate.mjs --check
 node --env-file=.env.local scripts/migrate.mjs
-npm.cmd run setup:storage
+# setup:storage ใช้เฉพาะระบบเดิมที่ต้องสร้าง bucket สำหรับรูปเก่า
 npm.cmd run bootstrap
 npm.cmd run dev
 ```
@@ -92,7 +92,7 @@ tests/                      Unit, HTTP boundary และ PostgreSQL/RLS integra
 | `POST /api/webhooks/line` | Raw-body HMAC, group allowlist, durable idempotent enqueue |
 | `GET /api/cron/process` | Bearer CRON_SECRET; LINE/Discord workers |
 | `POST /api/leaves/[id]/{link,review,correct}` | Server identity + RLS; RPC ตรวจ permission/version/สถานะซ้ำ |
-| `GET /api/evidence/[id]` | RLS ก่อนอ่าน private Storage; no-store |
+| `GET /api/evidence/[id]` | RLS ก่อน proxy รูปจาก Discord หรือ private Storage รุ่นเก่า; no-store |
 | `POST /api/upload/[token]` | ไม่ต้อง login; hashed token + MIME/magic bytes + decode + atomic consume |
 | `POST /api/manage/{employee,assignment,user,permission,department,line_group,setting}` | Zod + permission + transactional RPC |
 | `GET/POST /api/notifications` | เฉพาะผู้รับ; POST อ่านหนึ่งรายการหรือทั้งหมด |
@@ -118,13 +118,17 @@ npm.cmd audit --omit=dev
 
 หัวหน้าศูนย์ที่มีสิทธิ์ `data.clear` เปิด **ตั้งค่าระบบ → ล้างข้อมูลใบลา → ตรวจสอบข้อมูลก่อนล้าง** ระบบแสดงจำนวนข้อมูลทั้งหมด ต้องระบุเหตุผล ยอมรับขอบเขต และพิมพ์ `ล้างข้อมูลใบลา` ก่อนยืนยัน ไม่มีแท็กแยกรายการทดสอบ จึงลบใบลาทั้งหมดพร้อมหลักฐาน ลิงก์อัปโหลด ประวัติตรวจใบลา ข้อความ LINE คิว และแจ้งเตือนในเว็บ หากข้อมูลเปลี่ยนหรือ worker กำลังทำงาน ระบบให้ตรวจสอบใหม่
 
-เก็บพนักงาน แผนก Mentor บัญชี/สิทธิ์ การตั้งค่า กลุ่ม LINE และ audit ไว้ ไม่แตะ `public` หรือ Supabase Auth ข้อความ Discord ที่ส่งไปแล้วไม่ถูกลบ รหัส event LINE ขั้นต่ำถูกเก็บเพื่อกัน redelivery สร้างรายการเดิมกลับมา ไฟล์หลักฐานลบผ่านคิวเฉพาะ path ที่บันทึกไว้ใน bucket `mentor-korat-evidence` มีสถานะค้างและปุ่มลองใหม่เมื่อครบจำนวน retry
+เก็บพนักงาน แผนก Mentor บัญชี/สิทธิ์ การตั้งค่า กลุ่ม LINE และ audit ไว้ ไม่แตะ `public` หรือ Supabase Auth ข้อความแจ้งสถานะ Discord ยังอยู่ แต่ข้อความแนบรูปหลักฐานใหม่จะลบผ่านคิวตาม reference รูปเก่าใน bucket `mentor-korat-evidence` ลบเฉพาะ path ที่บันทึกไว้ มีสถานะค้างและปุ่มลองใหม่เมื่อครบจำนวน retry รหัส event LINE ขั้นต่ำถูกเก็บเพื่อกัน redelivery สร้างรายการเดิมกลับมา
 
 ก่อนใช้งานครั้งแรก ติดตั้ง migration `202611140001_clear_leave_data.sql` ตาม [DEPLOYMENT.md](DEPLOYMENT.md) การติดตั้งเพิ่มฟังก์ชันเท่านั้น ยังไม่ล้างข้อมูลจนกดปุ่มยืนยัน
 
 ติดตั้ง patch `202611140002_clear_data_safeupdate.sql` ด้วยเพื่อรองรับ safeupdate ของ Supabase API หากเคยติดตั้งตัวแรกแล้วให้รันเฉพาะ patch นี้ หรือใช้ SQL Editor bundle ฉบับล่าสุดที่ข้าม migration เดิมโดยตรวจ checksum
 
 หากต้องการล้าง **ประวัติการดำเนินการ** เพิ่มเติม ให้ใช้ปุ่ม **ล้างประวัติเก่าทั้งหมด** ในหน้าประวัติหรือหน้าตั้งค่า (migration `202611140003_clear_audit_history.sql`) แสดงจำนวนก่อนยืนยัน ต้องพิมพ์ `ล้างประวัติการดำเนินการ` พร้อมเหตุผล ปุ่มนี้ลบ audit เก่าทั้งหมด รวมการแก้พนักงานและการตั้งค่า และบันทึกการล้างครั้งล่าสุดไว้ 1 รายการ ไม่ลบข้อมูลใบลา/พนักงาน/การตั้งค่าปัจจุบัน ประวัติจากการทำงานครั้งใหม่หลังล้างจะถูกบันทึกตามปกติ
+
+## รูปหลักฐานใน Discord
+
+รูปใหม่ทุกไฟล์ที่พนักงานอัปโหลดผ่านลิงก์จะถูกย่อ/แปลง WebP แล้วแนบในห้อง Discord โดยตรง ไม่เขียนไฟล์เข้า Supabase Storage ฐานข้อมูลเก็บเฉพาะ metadata และ IDs ของข้อความ/attachment เปิดดูจากหน้าใบลาได้ผ่าน API ที่ตรวจสิทธิ์ก่อน รูปเก่าใน Supabase ยังอ่านได้และไม่ถูกย้ายหรือลบอัตโนมัติ ต้องติดตั้ง `202611140004_discord_evidence.sql` ก่อน deploy เวอร์ชันนี้ ใช้ `DISCORD_WEBHOOK_URL` เดิม ไม่ต้องใช้ bot token หากข้อความแนบรูปถูกลบหรือ webhook เดิมใช้ไม่ได้ รูปนั้นจะเปิดจากเว็บไม่ได้
 
 ## External scheduler
 

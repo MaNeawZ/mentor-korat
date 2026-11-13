@@ -8,7 +8,7 @@
 2. ใช้ SQL role ที่สร้าง schema ใหม่ได้ เก็บ connection string แบบ direct หรือ session pooler ใน `SUPABASE_MIGRATION_DATABASE_URL` ใช้ TLS ใน production
 3. รัน `node --env-file=.env.local scripts/migrate.mjs --check` ตรวจ reviewed checksum และข้อห้าม schema
 4. รัน `node --env-file=.env.local scripts/migrate.mjs` จะ lock migration, สร้างเฉพาะ mentor_korat, บันทึก version/checksum/applied_at, ข้ามไฟล์เดิม ถ้า checksum เปลี่ยนจะหยุด
-5. รัน `npm run setup:storage` สร้าง private bucket `mentor-korat-evidence` ผ่าน Storage API **ไม่แก้ storage tables** ไม่เปิด public policies และไม่สร้าง anon object grants
+5. ระบบใหม่เก็บไฟล์ใน Discord ไม่ต้องสร้าง bucket เพิ่ม หากใช้รูป Supabase รุ่นเก่า ให้คง private bucket `mentor-korat-evidence` ไว้ `npm run setup:storage` สร้าง bucket ผ่าน Storage API ได้เมื่อจำเป็น **ไม่แก้ storage tables** ไม่เปิด public policies และไม่สร้าง anon object grants
 6. ตั้งค่า Supabase Auth: ปิด public signup สำหรับ deployment นี้หากไม่กระทบระบบที่ใช้ project ร่วมกัน; หากระบบเดิมต้องใช้ signup ให้คงเดิม แอปนี้ตรวจ app_users เสมอ ผู้สมัครทั่วไปเข้าแอปไม่ได้
 7. ตั้ง Site URL และเพิ่ม redirect URL `https://your-domain/auth/callback` โดยคง redirect ของระบบอื่นไว้ เปิด email provider และ SMTP สำหรับ recovery ทดสอบส่ง recovery จริง
 8. ใช้ recovery email template ที่มี `{{ .ConfirmationURL }}` เพื่อ PKCE exchange ผู้ใช้เปิดลิงก์บน browser ที่ขอ recovery ถ้าเปลี่ยนอุปกรณ์ให้ขอลิงก์ใหม่
@@ -43,13 +43,15 @@
 
 ## 3. Discord
 
-สร้าง private channel จำกัดสมาชิกที่ได้รับอนุญาตให้อ่านเหตุผลการลา สร้าง webhook ใน channel นั้น ใส่ `DISCORD_WEBHOOK_URL` ฝั่ง server แล้วใช้ปุ่มทดสอบใน `/settings/discord` การกดปุ่มนี้ส่งข้อความจริงตามที่ผู้ดูแลสั่ง ไม่มีการส่งรูปหลักฐานอัตโนมัติ
+สร้าง private channel จำกัดสมาชิกที่ได้รับอนุญาตให้อ่านเหตุผลการลาและรูปหลักฐาน สร้าง webhook ใน channel นั้น ใส่ `DISCORD_WEBHOOK_URL` ฝั่ง server แล้วใช้ปุ่มทดสอบใน `/settings/discord` การกดปุ่มทดสอบส่งข้อความทดสอบ ส่วนการอัปโหลดของพนักงานจะแนบรูปใหม่ไปในห้องนี้โดยตรงตามคำขอผู้ใช้
 
 เปิด Discord Developer Mode → Copy User ID ของ Mentor → ใส่ settings/users ตรวจว่า ID เป็นของคนที่รับผิดชอบจริง `allowed_mentions` จำกัดเฉพาะ ID นี้ อ่าน [Discord Webhook API](https://github.com/discord/discord-api-docs/blob/main/developers/resources/webhook.mdx)
 
 Optional DM: สร้าง bot และนำเข้า server โดยเจ้าของ server เก็บ DISCORD_BOT_TOKEN/GUILD_ID ใน environment ผู้รับต้องอนุญาต DM ถ้าส่งไม่ได้ ระบบแจ้งเว็บให้คัดลอกลิงก์ ไม่ทำให้ workflow หยุด
 
-ข้อความแจ้งใบลาในห้อง Discord จะแนบ **ลิงก์อัปโหลดหลักฐาน — ส่งต่อให้พนักงาน** ขณะสถานะปัจจุบันรออัปโหลด/ขอหลักฐานใหม่และยังมี active token ไม่ต้องตั้ง bot token สำหรับลิงก์ในห้อง Mentor คัดลอก URL ไปให้พนักงานได้ ใช้ token เดิมของระบบแบบครั้งเดียว ไม่สร้างลิงก์ใหม่ทุก retry หลังอัปโหลด โหมด edit จะอัปเดตข้อความโดยเอาลิงก์ออก ห้องนี้ต้องจำกัดสมาชิกเพราะผู้ที่มีลิงก์อัปโหลดได้ ไม่ส่งรูปหลักฐานลง Discord การ deploy โค้ดนี้ไม่อัปเดตข้อความ DONE เก่าเอง ลิงก์จะแนบเมื่อมีแจ้งเตือนใหม่หรืออัปเดตครั้งถัดไป ไม่ต้องรัน migration เพิ่ม
+ข้อความแจ้งใบลาในห้อง Discord จะแนบ **ลิงก์อัปโหลดหลักฐาน — ส่งต่อให้พนักงาน** ขณะสถานะปัจจุบันรออัปโหลด/ขอหลักฐานใหม่และยังมี active token ไม่ต้องตั้ง bot token สำหรับลิงก์ในห้อง Mentor คัดลอก URL ไปให้พนักงานได้ ใช้ token เดิมของระบบแบบครั้งเดียว ไม่สร้างลิงก์ใหม่ทุก retry หลังอัปโหลด โหมด edit จะอัปเดตข้อความโดยเอาลิงก์ออก ห้องนี้ต้องจำกัดสมาชิกเพราะผู้ที่มีลิงก์อัปโหลดได้ และรูปหลักฐานใหม่จะส่งเข้าห้องเดียวกัน ไม่อัปเดตข้อความ DONE เก่าย้อนหลัง
+
+ก่อน deploy เวอร์ชันเก็บรูปใน Discord ต้องรัน `supabase/migrations/202611140004_discord_evidence.sql` (หรือ SQL Editor bundle ล่าสุดทั้งไฟล์) หนึ่งครั้ง ไม่เขียนรูปใหม่เข้า Supabase Storage และไม่ย้าย/ลบรูปเดิม ปุ่ม setup:storage ใช้เฉพาะการรองรับรูปเก่าที่มีอยู่ ไม่จำเป็นสำหรับระบบใหม่ที่ไม่มีรูปใน Storage ใช้ Webhook เดิมที่มีสิทธิ์ส่งไฟล์ ไม่ต้องเพิ่ม bot token ระบบเก็บ provider/reference แล้ว GET Webhook Message ใหม่เมื่อเปิดดู เพื่อรับ signed attachment URL ที่ยังใช้ได้ตาม [Discord CDN documentation](https://docs.discord.com/developers/reference#signed-attachment-cdn-urls) ไม่เก็บ URL ชั่วคราวเป็นที่อยู่ถาวร หากลบข้อความแนบรูป/ห้อง/webhook รูปนั้นอาจเปิดดูไม่ได้ ต้องเก็บ webhook เดิมไว้สำหรับหลักฐานเก่า
 
 ค่า `discord_mode` ใน settings: `"edit"` อัปเดตข้อความเดิม, `"events"` ส่งข้อความใหม่ (ค่าเป็น JSON string)
 
@@ -126,7 +128,7 @@ Migration runner ใช้ advisory transaction lock, version/checksum history, 
 
 ฟีเจอร์ล้างข้อมูลต้องติดตั้ง migration `202611140001_clear_leave_data.sql` หนึ่งครั้งก่อนใช้งาน หากใช้ SQL Editor ให้เปิด `supabase/setup-sql-editor.sql` ฉบับล่าสุด คัดลอกทั้งหมดไปรันใน Supabase SQL Editor ของโปรเจกต์เดิม ตัว bundle ตรวจ checksum/ข้าม migration ที่ติดตั้งแล้ว และไม่เรียกฟังก์ชันล้างข้อมูลระหว่างติดตั้ง จากนั้น deploy main ล่าสุดและเข้าสู่ระบบใหม่เพื่อรับสิทธิ์ `data.clear` ของหัวหน้าศูนย์
 
-ปุ่มอยู่ที่ **ตั้งค่าระบบ → ล้างข้อมูลใบลา** ตรวจจำนวนก่อนพิมพ์ `ล้างข้อมูลใบลา` และระบุเหตุผล จะลบใบลาทั้งหมด ไม่ใช่เฉพาะรายการที่มีคำว่าทดสอบ ข้อมูลหลักและ audit ยังอยู่ ไม่ลบข้อความในห้อง Discord ไฟล์ Storage ใช้ durable cleanup queue และ worker เดิม ระบบแสดงจำนวนค้าง/ล้มเหลว ลองใหม่ได้จากหน้าเดียวกัน ลิงก์อัปโหลดเดิมจะใช้ไม่ได้ หลีกเลี่ยงให้ผู้ใช้ส่งใบลา/อัปโหลดระหว่างเคลียร์ข้อมูล รายการใหม่ที่มาหลัง transaction ยังคงรับตามปกติ
+ปุ่มอยู่ที่ **ตั้งค่าระบบ → ล้างข้อมูลใบลา** ตรวจจำนวนก่อนพิมพ์ `ล้างข้อมูลใบลา` และระบุเหตุผล จะลบใบลาทั้งหมด ไม่ใช่เฉพาะรายการที่มีคำว่าทดสอบ ข้อมูลหลักและ audit ยังอยู่ ข้อความแจ้งสถานะ Discord ยังคงอยู่ ส่วนข้อความแนบรูปหลักฐานใหม่และไฟล์ Storage เก่าใช้ durable cleanup queue ตาม provider/reference ที่บันทึกไว้ ระบบแสดงจำนวนค้าง/ล้มเหลว ลองใหม่ได้จากหน้าเดียวกัน ลิงก์อัปโหลดเดิมจะใช้ไม่ได้ หลีกเลี่ยงให้ผู้ใช้ส่งใบลา/อัปโหลดระหว่างเคลียร์ข้อมูล รายการใหม่ที่มาหลัง transaction ยังคงรับตามปกติ
 
 ตรวจ `/api/health`, queue depth/FAILED และจำนวน parsing issues เป็นประจำ ตรวจ external scheduler ทำงานตามรอบที่เลือก งาน PROCESSING หมด lease หลัง 5 นาทีจึงพร้อมให้ worker รอบถัดไป claim ใหม่ FAILED ลองใหม่ได้ด้วย `POST /api/queues/retry` หรือปุ่มในหน้าการเชื่อมต่อ พร้อมยืนยันและ audit
 

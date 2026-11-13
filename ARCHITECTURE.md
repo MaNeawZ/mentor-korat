@@ -31,9 +31,11 @@ Supabase SSR cookies → Proxy refresh → Server `getUser()` → `my_profile()`
 
 สร้าง nonce แบบ random 256 bits → HMAC-SHA256 ด้วย secret ฝั่ง server → token 256 bits URL-safe เก็บเฉพาะ SHA256(token) และ nonce ไม่เก็บ raw token Mentor ที่มีสิทธิ์ขอลิงก์ผ่าน protected endpoint ซึ่ง reconstruct ด้วย secret ได้ การอ่าน DB อย่างเดียวไม่เพียงพอสำหรับสร้างลิงก์
 
-หนึ่ง active token ต่อใบลาบังคับด้วย partial unique index เมื่อ reupload ใช้ lock ใบลา → revoke เดิม → insert ใหม่ใน transaction เมื่อรับไฟล์: ตรวจ token → จำกัด bytes → MIME/magic bytes → decode ด้วย sharp จำกัด 24MP → rotate/resize → WebP ล้าง EXIF → upload private storage → `complete_upload` lock token/leave → evidence metadata + consume token + state + audit + outbox atomic
+หนึ่ง active token ต่อใบลาบังคับด้วย partial unique index เมื่อ reupload ใช้ lock ใบลา → revoke เดิม → insert ใหม่ใน transaction เมื่อรับไฟล์: ตรวจ token/Discord migration readiness → จำกัด bytes → MIME/magic bytes → decode ด้วย sharp จำกัด 24MP → rotate/resize → WebP ล้าง EXIF → ส่ง multipart attachment ไป Discord (`wait=true`) → `complete_discord_upload` lock token/leave → บันทึก metadata provider/webhook ID/message ID/attachment ID + consume token + state + audit + outbox atomic ไฟล์ใหม่ไม่ผ่าน Supabase Storage และไม่บันทึก signed CDN URL ลง DB
 
-Concurrent uploads อาจอัปโหลดวัตถุชั่วคราวทั้งสอง แต่มี transaction เดียว consume ได้ อีกคำขอถูกปฏิเสธและลบไฟล์ส่วนเกิน หาก Storage ล้มเหลว token ไม่เปลี่ยน หาก DB ตอบ error ที่แน่นอน ลบวัตถุชั่วคราว หาก transport ขาดจนไม่ทราบผล commit จะไม่ลบ เพราะอาจเป็นหลักฐานที่ commit แล้ว ต้อง reconcile orphan ที่ไม่มี metadata ภายหลัง
+Concurrent uploads อาจแนบไฟล์ชั่วคราวทั้งสอง แต่มี transaction เดียว consume ได้ อีกคำขอถูกปฏิเสธและลบข้อความแนบไฟล์ส่วนเกิน หาก Discord ล้มเหลว token ไม่เปลี่ยน หาก DB ตอบ SQLSTATE ยืนยัน rollback ลบข้อความชั่วคราวและเข้าคิว cleanup หากลบไม่สำเร็จ หาก transport ขาดจนไม่ทราบผล commit จะไม่ลบ เพราะอาจเป็นหลักฐานที่ commit แล้ว ต้อง reconcile orphan ภายหลัง ไม่ส่งไฟล์กลับ Supabase เป็น fallback รูปเก่ายังใช้ provider=supabase และอ่านจาก private bucket ตามเดิม
+
+`GET /api/evidence/[id]` ตรวจ Auth/RLS ก่อนใช้ service อ่านไฟล์ สำหรับ Discord เรียก Get Webhook Message เพื่อได้ signed attachment URL ใหม่ทุกครั้ง ตรวจ HTTPS/Discord CDN/attachment path และจำกัด bytes ก่อน proxy แบบ private/no-store ไม่ redirect ไป CDN และไม่ส่ง webhook token ให้ browser คิวล้างข้อมูลเก็บ provider/reference เพื่อเลือก DELETE เฉพาะข้อความหลักฐาน Discord หรือ remove exact path ของ Supabase รุ่นเก่า แยกจากข้อความการ์ดสถานะ
 
 ## Review state machine
 

@@ -325,3 +325,112 @@ it("clears all old history atomically with confirmation, reason and stale-previe
     /DELETE FROM mentor_korat.audit_logs WHERE id IS NOT NULL;/,
   );
 });
+it("commits Discord metadata with token consumption, status, audit and outbox; denies clients and rolls back invalid uploads", async () => {
+  const path = `${lid}/77777777-7777-4777-8777-777777777777.webp`;
+  const args = [
+    "c".repeat(64),
+    path,
+    100,
+    "123456789012345678",
+    "234567890123456789",
+    "345678901234567890",
+  ];
+  await actor(head);
+  await expect(
+    db.query(
+      "SELECT mentor_korat.complete_discord_upload($1,$2,$3,$4,$5,$6)",
+      args,
+    ),
+  ).rejects.toThrow(/permission denied/);
+  await db.exec(
+    `RESET ROLE;INSERT INTO mentor_korat.evidence_upload_tokens(leave_id,token_hash,nonce) VALUES('${lid}',repeat('c',64),repeat('d',64));SET ROLE service_role`,
+  );
+  await expect(
+    db.query("SELECT mentor_korat.complete_discord_upload($1,$2,$3,$4,$5,$6)", [
+      ...args.slice(0, 3),
+      "invalid",
+      ...args.slice(4),
+    ]),
+  ).rejects.toThrow("INVALID_DISCORD_REFERENCE");
+  await expect(
+    db.query("SELECT mentor_korat.complete_discord_upload($1,$2,$3,$4,$5,$6)", [
+      args[0],
+      args[1],
+      0,
+      ...args.slice(3),
+    ]),
+  ).rejects.toThrow(/check constraint/);
+  expect(
+    (
+      await db.query(
+        "SELECT state FROM mentor_korat.evidence_upload_tokens WHERE token_hash=repeat('c',64)",
+      )
+    ).rows,
+  ).toEqual([{ state: "ACTIVE" }]);
+  await db.query(
+    "SELECT mentor_korat.complete_discord_upload($1,$2,$3,$4,$5,$6)",
+    args,
+  );
+  expect(
+    (
+      await db.query(
+        "SELECT provider,discord_message_id,discord_attachment_id FROM mentor_korat.evidence_files WHERE path=$1",
+        [path],
+      )
+    ).rows,
+  ).toEqual([
+    {
+      provider: "discord",
+      discord_message_id: args[4],
+      discord_attachment_id: args[5],
+    },
+  ]);
+  expect(
+    (
+      await db.query(
+        "SELECT status FROM mentor_korat.leave_requests WHERE id=$1",
+        [lid],
+      )
+    ).rows,
+  ).toEqual([{ status: "WAITING_MENTOR_REVIEW" }]);
+  expect(
+    (
+      await db.query(
+        "SELECT state FROM mentor_korat.evidence_upload_tokens WHERE token_hash=repeat('c',64)",
+      )
+    ).rows,
+  ).toEqual([{ state: "USED" }]);
+  expect(
+    (
+      await db.query(
+        "SELECT kind FROM mentor_korat.notification_outbox WHERE leave_id=$1",
+        [lid],
+      )
+    ).rows,
+  ).toEqual([{ kind: "WAITING_MENTOR_REVIEW" }]);
+  await expect(
+    db.query(
+      "SELECT mentor_korat.complete_discord_upload($1,$2,$3,$4,$5,$6)",
+      args,
+    ),
+  ).rejects.toThrow("INVALID_TOKEN");
+  await actor(head);
+  await clear((await preview()).snapshot);
+  await db.exec("RESET ROLE");
+  const jobs = (
+    await db.query<{
+      provider: string;
+      discord_message_id: string | null;
+      path: string;
+    }>(
+      "SELECT provider,discord_message_id,path FROM mentor_korat.storage_cleanup_jobs ORDER BY provider",
+    )
+  ).rows;
+  expect(jobs).toHaveLength(2);
+  expect(jobs[0]).toEqual({
+    provider: "discord",
+    discord_message_id: args[4],
+    path,
+  });
+  expect(jobs[1].provider).toBe("supabase");
+});

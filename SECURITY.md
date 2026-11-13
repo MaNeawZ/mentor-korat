@@ -12,13 +12,13 @@ SECURITY DEFINER functions ใช้ empty search_path และ qualified refer
 
 service client อยู่ใน `server-only` module ไม่ export key ไป browser `NEXT_PUBLIC_*` มีเฉพาะ URL/publishable key/app origin token secret และ service role เป็น server env ห้ามใส่ secret ใน source/log/CI artifacts webhook errors บันทึกเฉพาะ error code ไม่บันทึก payload/token/health reason
 
-Upload token ไม่เก็บ plaintext: random nonce + HMAC server secret → SHA256 hash ตรวจ lookup เก็บ nonce สำหรับ reconstruct เฉพาะ endpoint ที่ตรวจใบลาผ่าน RLS หนึ่ง active token/leave, revoke ทันทีเมื่อ reupload, consume ใน transaction หลัง storage upload สำเร็จ
+Upload token ไม่เก็บ plaintext: random nonce + HMAC server secret → SHA256 hash ตรวจ lookup เก็บ nonce สำหรับ reconstruct เฉพาะ endpoint ที่ตรวจใบลาผ่าน RLS หนึ่ง active token/leave, revoke ทันทีเมื่อ reupload, consume ใน transaction หลัง Discord ยืนยันรับไฟล์แนบสำเร็จ
 
 หาก UPLOAD_TOKEN_SECRET รั่ว ให้เปลี่ยน secret และ revoke/reissue active links ทั้งหมดใน maintenance window การเปลี่ยน secret โดยไม่ reissue ทำให้ hash เก่าไม่ตรงกับลิงก์ที่ reconstruct ใหม่ ห้ามหมุน secret แบบไม่มีแผน
 
 ## Evidence privacy
 
-Private bucket เท่านั้น ไม่ใช้ public URL ห้ามแก้ storage tables โดยตรง Secure evidence endpoint ตรวจ metadata ด้วย session RLS แล้วจึงใช้ service role download ส่ง Cache-Control private/no-store ไม่ให้ Next Image optimizer cache รูปสุขภาพ หน้าจอใช้ img แบบ lazy ที่ intentional เพื่อตรวจ permission ทุกครั้ง
+ตามคำขอผู้ใช้ รูปใหม่แนบในห้อง Discord ที่กำหนดโดยตรง ไม่อัปโหลดเข้า Supabase Storage เก็บเพียง provider และ message/attachment/webhook IDs ใน metadata รูปเก่ายังอยู่ใน private bucket ไม่ใช้ public URL หรือแก้ storage tables โดยตรง Secure evidence endpoint ตรวจ metadata ด้วย session RLS ก่อน proxy รูปจาก provider แบบ private/no-store ไม่มี signed URL หรือ webhook token ส่งออก browser การเข้าถึงรูปภายใน Discord ขึ้นกับสิทธิ์สมาชิกของห้องนั้น การลบข้อความแนบรูปหรือ webhook เดิมทำให้รูปนั้นเปิดจากเว็บไม่ได้
 
 Upload จำกัดขนาด/bytes แม้ไม่มี Content-Length ตรวจ MIME และ magic bytes แล้ว decode จริงผ่าน sharp จำกัด input pixels resize/normalize/WebP ล้าง metadata ไม่ยอมรับ SVG/PDF/GIF ไม่ใช้ filename ที่ผู้ใช้ส่งมา สุ่ม object path ป้องกัน overwrite และยกเลิก token เฉพาะหลัง commit metadata
 
@@ -32,7 +32,7 @@ Login/recovery และ public upload ใช้ shared PostgreSQL rate limiter 
 
 LINE ตรวจ HMAC SHA256 raw body ก่อน JSON parse/DB access จำกัด body, allowlist group, duplicate event/document constraints รายชื่อกลุ่มรอยืนยันมาจาก signed event แต่ผู้ดูแลต้องยืนยันว่าเป็นกลุ่มที่ต้องการก่อนเปิด
 
-Discord จำกัด allowed_mentions.users ตาม Mentor ID และ parse=[] ไม่แนบหลักฐาน แสดงเหตุผลการลาเฉพาะ private channel ที่ผู้ดูแลกำหนด หาก channel เปลี่ยนเป็นสาธารณะเป็นความเสี่ยงด้าน operation ต้องตรวจสิทธิ์เป็นระยะ
+Discord จำกัด allowed_mentions.users ตาม Mentor ID และ parse=[] รูปหลักฐานใหม่ถูกแนบไปห้องที่ผู้ดูแลกำหนดตามคำขอผู้ใช้ ใช้ชื่อไฟล์สุ่มและ WebP ที่ล้าง metadata แล้ว ไม่ใส่ upload token ในชื่อไฟล์หรือข้อความหลักฐาน ห้องต้องจำกัดสมาชิกทั้งเหตุผลการลาและรูปหลักฐาน Helper ตรวจ HTTPS/hostname/webhook ID/attachment path, ปิด redirect และจำกัด download bytes ไม่ดึง URL จาก client หากเปลี่ยน webhook ต้องคงช่องทางอ่านหลักฐานเดิม มิฉะนั้นเว็บจะแจ้งว่าอ่านไม่ได้ ไม่เปิดเผย webhook token ใน error/log
 
 ## Transactions / audit
 

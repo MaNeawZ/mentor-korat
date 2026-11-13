@@ -127,8 +127,8 @@ export function ClearDataPanel({ enabled }: { enabled: boolean }) {
         และแจ้งเตือนในเว็บ การลบย้อนกลับไม่ได้
       </p>
       <p className="muted">
-        เก็บพนักงาน แผนก Mentor บัญชีผู้ใช้ การตั้งค่า และบันทึกตรวจสอบไว้ ข้อความที่ส่งไปยัง
-        Discord แล้วจะยังอยู่ในห้องเดิม
+        เก็บพนักงาน แผนก Mentor บัญชีผู้ใช้ การตั้งค่า และบันทึกตรวจสอบไว้ ข้อความแจ้งเตือน
+        Discord ยังอยู่ ส่วนข้อความแนบรูปหลักฐานจะลบผ่านคิว
       </p>
       <Button
         variant="destructive"
@@ -150,7 +150,7 @@ export function ClearDataPanel({ enabled }: { enabled: boolean }) {
       {storage && storage.pending > 0 && (
         <div role="status">
           <p>
-            ไฟล์หลักฐานรอลบจาก Storage {storage.pending} ไฟล์
+            ไฟล์หลักฐานรอลบจาก Discord / Storage {storage.pending} ไฟล์
             {storage.failed > 0
               ? ` (ลบไม่สำเร็จ ${storage.failed} ไฟล์)`
               : " — ระบบกำลังดำเนินการและลองใหม่อัตโนมัติ"}
