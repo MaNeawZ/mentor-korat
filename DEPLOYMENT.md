@@ -78,7 +78,9 @@ CI ยังติดตั้ง Chromium เพื่อรัน browser test
 
 ### External scheduler (ไม่ใช้ Vercel Cron)
 
-เตรียม `.github/workflows/process-worker.yml` เรียก worker ทุก 5 นาทีผ่าน GitHub Actions มี concurrency control และกด Run workflow เองได้ ไม่ใช้ database password และไม่รัน migration อัตโนมัติ
+ข้อความ LINE จะปลุก worker ทันทีผ่าน Next.js after() หลังบันทึกคิวและส่ง HTTP response แล้ว การอัปโหลดหลักฐาน การตรวจใบลา และเปลี่ยน assignment ก็ปลุก worker หลัง commit เช่นกัน ต้องใช้ deployment ที่รองรับ after()/waitUntil และ maxDuration ที่ตั้งไว้
+
+เตรียม `.github/workflows/process-worker.yml` เรียก worker ทุก 5 นาทีผ่าน GitHub Actions เป็น fallback สำหรับ retry/งานค้าง มี concurrency control และกด Run workflow เองได้ ไม่ใช้ database password และไม่รัน migration อัตโนมัติ
 
 หลัง deploy แอปสำเร็จ:
 
@@ -93,7 +95,7 @@ Workflow ต้องอยู่ใน default branch (ตอนนี้ main)
 
 GitHub scheduled Actions ถี่สุด 5 นาที อาจเริ่มล่าช้า/ถูกข้ามเมื่อระบบหนาแน่น ไม่รับประกันว่า LINE/Discord จะอัปเดตภายใน 5 นาที และ public repository ที่ไม่มีกิจกรรม 60 วันอาจถูกปิด schedule อัตโนมัติ ตรวจ GitHub Actions usage/quota และสถานะ schedule เป็นระยะ อ่าน [GitHub schedule limitations](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 
-หากต้องการทุก **1 นาที** ให้ใช้ scheduler ภายนอกที่รองรับ custom headers โดยตั้ง:
+หากต้องการ retry/กู้คืนงานค้างทุก **1 นาที** ให้ใช้ scheduler ภายนอกที่รองรับ custom headers โดยตั้ง:
 
 ```text
 Method: GET

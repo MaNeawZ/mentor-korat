@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   user: vi.fn(),
   session: vi.fn(),
+  wake: vi.fn(),
 }));
+vi.mock("@/lib/worker-wakeup", () => ({ wakeWorker: mocks.wake }));
 vi.mock("@/lib/supabase/server", () => ({
   adminClient: () => ({ from: mocks.from, rpc: mocks.rpc }),
   sessionClient: mocks.session,
@@ -45,6 +47,7 @@ beforeEach(() => {
   mocks.user.mockResolvedValue(null);
   mocks.from.mockReset();
   mocks.rpc.mockReset();
+  mocks.wake.mockReset();
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("HTTP trust boundaries", () => {
@@ -52,6 +55,7 @@ describe("HTTP trust boundaries", () => {
     const r = await webhook(lineRequest([event], false));
     expect(r.status).toBe(401);
     expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.wake).not.toHaveBeenCalled();
   });
   it("accepts LINE verify requests with no events", async () => {
     mocks.from.mockReturnValue({
@@ -73,6 +77,7 @@ describe("HTTP trust boundaries", () => {
       [{ id: group, name: "กลุ่มที่รอยืนยัน", active: false }],
       { onConflict: "id", ignoreDuplicates: true },
     );
+    expect(mocks.wake).not.toHaveBeenCalled();
   });
   it("enqueues authorized events idempotently", async () => {
     const insert = vi.fn(async () => ({ error: null }));
@@ -91,6 +96,25 @@ describe("HTTP trust boundaries", () => {
       onConflict: "id",
       ignoreDuplicates: true,
     });
+    expect(mocks.wake).toHaveBeenCalledOnce();
+  });
+  it("does not report success or wake a worker when durable enqueue fails", async () => {
+    mocks.from.mockImplementation((table) =>
+      table === "line_groups"
+        ? {
+            upsert: async () => ({ error: null }),
+            select: () => ({
+              eq: async () => ({ data: [{ id: group }], error: null }),
+            }),
+          }
+        : {
+            upsert: async () => ({
+              error: { message: "database unavailable" },
+            }),
+          },
+    );
+    expect((await webhook(lineRequest([event]))).status).toBe(503);
+    expect(mocks.wake).not.toHaveBeenCalled();
   });
   it("blocks anonymous evidence and review access", async () => {
     const id = "11111111-1111-4111-8111-111111111111";

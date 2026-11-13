@@ -405,4 +405,103 @@ describe("real PostgreSQL transaction and RLS integration (isolated PGlite)", ()
       ),
     ).toEqual({ issues: ["UNKNOWN_EMPLOYEE"] });
   });
+  it("creates distinct leaves for multiple registered employees in one processing burst", async () => {
+    await admin();
+    const second = "77777777-7777-4777-8777-777777777777";
+    await db.query(
+      "INSERT INTO mentor_korat.employees(id,code,name,department_id,mentor_id) VALUES($1,$2,$3,$4,$5)",
+      [second, "68365", "พนักงาน ทดสอบ", department, mentor],
+    );
+    const messages = [
+      {
+        event: "multi-1",
+        code: "68364",
+        name: "จักรพรรดิ์ อนุไพร",
+        doc: "LE-256911003480",
+      },
+      {
+        event: "multi-2",
+        code: "68365",
+        name: "พนักงาน ทดสอบ",
+        doc: "LE-256911003481",
+      },
+    ];
+    for (const message of messages) {
+      await db.query(
+        "INSERT INTO mentor_korat.integration_events(id,payload) VALUES($1,$2::jsonb)",
+        [
+          message.event,
+          JSON.stringify({
+            source: { groupId: "group" },
+            message: { text: "original" },
+          }),
+        ],
+      );
+      const t = newToken(secret);
+      await db.query("SELECT mentor_korat.ingest_leave($1,$2::jsonb,$3,$4)", [
+        message.event,
+        JSON.stringify({
+          employee_code: message.code,
+          employee_name: message.name,
+          document_number: message.doc,
+          leave_date: "2026-11-13",
+          leave_type: "ลากิจ",
+          period: "FULL",
+          reason: "ทดสอบระบบ",
+          issues: [],
+        }),
+        t.hash,
+        t.nonce,
+      ]);
+    }
+    expect(
+      await scalar(
+        "SELECT count(*)::int n FROM mentor_korat.leave_requests WHERE document_number IN ('LE-256911003480','LE-256911003481')",
+      ),
+    ).toEqual({ n: 2 });
+  });
+  it("shows mismatched names and reused document numbers as separate issues instead of silently losing messages", async () => {
+    await admin();
+    const cases = [
+      {
+        event: "wrong-name",
+        doc: "LE-256911003482",
+        name: "ชื่อ ไม่ตรง",
+        expected: ["NAME_MISMATCH"],
+      },
+      {
+        event: "same-document",
+        doc: "LE-256911003480",
+        name: "พนักงาน ทดสอบ",
+        expected: ["DUPLICATE_DOCUMENT"],
+      },
+    ];
+    for (const message of cases) {
+      await db.query(
+        "INSERT INTO mentor_korat.integration_events(id,payload) VALUES($1,$2::jsonb)",
+        [message.event, "{}"],
+      );
+      const t = newToken(secret);
+      await db.query("SELECT mentor_korat.ingest_leave($1,$2::jsonb,$3,$4)", [
+        message.event,
+        JSON.stringify({
+          employee_code: "68365",
+          employee_name: message.name,
+          document_number: message.doc,
+          leave_date: "2026-11-13",
+          leave_type: "ลากิจ",
+          period: "FULL",
+          reason: "ทดสอบระบบ",
+          issues: [],
+        }),
+        t.hash,
+        t.nonce,
+      ]);
+      const r = await db.query(
+        "SELECT issues FROM mentor_korat.leave_parsing_issues WHERE event_id=$1",
+        [message.event],
+      );
+      expect(r.rows).toEqual([{ issues: message.expected }]);
+    }
+  });
 });

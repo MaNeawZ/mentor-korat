@@ -4,6 +4,8 @@ import { check } from "@/lib/api";
 import { PageHeader } from "@/components/page-header";
 import { EntityForm } from "@/components/entity-form";
 import { SettingsTabs } from "@/components/settings-tabs";
+import Link from "next/link";
+import { describeParsingIssues } from "@/lib/line/issues";
 export default async function Line() {
   await requireUser("settings.manage");
   const db = await sessionClient();
@@ -73,10 +75,36 @@ export default async function Line() {
         {issues.data?.map((i) => (
           <details key={i.id} className="audit-entry">
             <summary>
-              {i.event_id} · {JSON.stringify(i.issues)}
+              {describeParsingIssues(i.issues)}
+              <small>
+                รับผลตรวจเมื่อ{" "}
+                {new Intl.DateTimeFormat("th-TH", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                  timeZone: "Asia/Bangkok",
+                }).format(new Date(i.created_at))}
+              </small>
             </summary>
             <pre>{JSON.stringify(i.parsed, null, 2)}</pre>
-            <p>แก้ไขโดยตรวจข้อมูลต้นฉบับและส่งข้อความ LINE ที่ถูกต้องด้วย event ใหม่</p>
+            <p>
+              ตรวจรหัส/ชื่อกับข้อมูลพนักงาน แล้วส่งข้อความที่ถูกต้องใน LINE อีกครั้ง
+              รายการเลขใบลาซ้ำให้เปิดใบลาเดิมเพื่อตรวจสอบ
+            </p>
+            <div className="row wrap">
+              <Link className="text-link" href="/employees">
+                ตรวจข้อมูลพนักงาน →
+              </Link>
+              <Link
+                className="text-link"
+                href={
+                  typeof i.parsed?.document_number === "string"
+                    ? `/leaves?q=${encodeURIComponent(i.parsed.document_number)}`
+                    : "/leaves"
+                }
+              >
+                ค้นหาใบลาเดิม →
+              </Link>
+            </div>
           </details>
         ))}
         {!issues.data?.length && <p className="muted">ไม่มีรายการที่ต้องตรวจสอบ</p>}

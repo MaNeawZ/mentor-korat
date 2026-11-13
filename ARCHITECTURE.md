@@ -18,8 +18,8 @@ Supabase SSR cookies → Proxy refresh → Server `getUser()` → `my_profile()`
 
 1. จำกัด body ที่อ่านใน memory และตรวจ SHA256 HMAC จาก raw body
 2. เก็บเฉพาะ group ID จาก event ที่ signature ถูกต้องเป็นกลุ่มรอยืนยัน `active=false` ไม่เก็บข้อความจากกลุ่มที่ไม่อนุญาต
-3. สำหรับกลุ่ม active บันทึก `integration_events` โดยใช้ `webhookEventId` เป็น PK และ ignore duplicate จากนั้นตอบ 200
-4. Cron worker claim jobs ด้วย row locks / SKIP LOCKED และ lease 5 นาที
+3. สำหรับกลุ่ม active บันทึก `integration_events` โดยใช้ `webhookEventId` เป็น PK และ ignore duplicate จากนั้นตอบ 200 พร้อมลงทะเบียน Next.js after() ให้ปลุก worker หลัง response
+4. Worker claim jobs ด้วย row locks / SKIP LOCKED และ lease 5 นาที ปลุกทันทีจาก webhook และใช้ external scheduler เป็น fallback สำหรับ retry/งานที่ยังเหลือ
 5. Parse ข้อความแบบ deterministic, Thai month / BE year, ประเภทการลาจาก settings
 6. `ingest_leave` lock event, ตรวจ employee/name/duplicate document/fields, ข้อมูลผิดเก็บ parsing issue และแจ้งผู้ดูแล ไม่เดาข้อมูล
 7. ข้อมูลถูกสร้าง leave + raw message + hashed token + history + audit + web notification + Discord outbox ใน transaction เดียวกัน
@@ -57,7 +57,9 @@ WAITING_MENTOR_REVIEW / WAITING_FINAL_REVIEW
 
 ## Notifications / Discord
 
-Web notifications มี RLS ตาม recipient; โหลด 12 รายการล่าสุดและ unread count หน้าทั้งหมดมี pagination polling 60 วินาทีเมื่อ visible และ refresh Server Components โดยไม่ reload ทั้งหน้า เหมาะกับทีม 100–150 คน ยังไม่เปิด Realtime publication เพื่อไม่เปลี่ยน shared publication ของระบบอื่น
+Web notifications มี RLS ตาม recipient; โหลด 12 รายการล่าสุดและ unread count หน้าทั้งหมดมี pagination polling ทุก 15 วินาทีเมื่อ visible ไม่ส่ง request ซ้อนกัน และ refresh Server Components เมื่อ notification snapshot เปลี่ยน มี fallback refresh ทุก 60 วินาทีสำหรับรายการที่ไม่ได้สร้าง notification ให้ role นั้น ยังไม่เปิด Realtime publication เพื่อไม่เปลี่ยน shared publication ของระบบอื่น
+
+การอัปโหลดหลักฐาน ตรวจใบลา และเปลี่ยน assignment จะปลุก worker หลัง commit เช่นเดียวกัน Background wake ทำได้สูงสุด 5 batches โดยหยุดเริ่ม batch ใหม่หลัง 120 วินาที และอยู่ภายใต้ maxDuration ของ function หาก wake ล้มเหลว/หมดเวลายังมี durable queue และ lease สำหรับ scheduler รอบถัดไป ไม่รับประกัน latency จากการรันในเครื่องแทน Vercel จริง
 
 Discord outbox แยก transaction จากการส่งจริง webhook failure ไม่กระทบใบลา claim queue มี lease และ serialize delivery batches ป้องกัน cron ซ้อนกัน retry exponential backoff และเคารพ 429 retry_after สูงสุด 8 ครั้ง จากนั้น FAILED ให้ผู้ดูแล retry ผ่าน endpoint/UI ได้ ข้อความมี protected dashboard URL ไม่มี raw upload token หรือรูปหลักฐาน
 

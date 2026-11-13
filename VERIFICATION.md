@@ -8,7 +8,7 @@
 |---|---|
 | `npm run lint` | ผ่าน ไม่มี error/warning |
 | `npm run typecheck` | ผ่าน TypeScript strict |
-| `npm test` | ผ่าน 73 tests / 6 files หลังเพิ่ม SQL Editor export และ external scheduler |
+| `npm test` | ผ่าน 80 tests / 7 files หลังเพิ่ม SQL Editor export, external scheduler และ immediate worker wake |
 | `npm run migrations:check` | ผ่าน 3 migrations พร้อม checksum |
 | `npm run build` | ผ่าน Next.js 16.4.6 production build |
 | `npm run test:browser` | ผ่าน 8 tests บน production server ที่รันในเครื่อง |
@@ -40,7 +40,9 @@ Browser preview / Computer Use ในแอปเปิดไม่ได้จ�
 
 ## สิ่งที่ยังไม่ได้ทดสอบ / ไม่ได้ดำเนินการ
 
-การแก้ไข external scheduler: ถอด `crons` จาก vercel.json, เพิ่ม GitHub workflow ทุก 5 นาทีแบบเปิดใช้ด้วย repository variable และเพิ่ม caller script ที่ส่ง bearer header โดยไม่ตาม redirect ทดสอบ 13 กรณีสำหรับ caller/config/auth/error handling ด้วย mocked HTTP แล้ว รวมทั้ง lint/typecheck/production build ผ่าน ยังไม่ได้ตั้ง GitHub secrets/variable หรือเรียก worker บน Vercel จริง ทดสอบเพิ่มเติมการ export SQL Editor 2 กรณีรันบน PGlite และรวมอยู่ในยอด 73 tests ข้างต้น
+การแก้ไข external scheduler: ถอด `crons` จาก vercel.json, เพิ่ม GitHub workflow ทุก 5 นาทีแบบเปิดใช้ด้วย repository variable และเพิ่ม caller script ที่ส่ง bearer header โดยไม่ตาม redirect ทดสอบ 13 กรณีสำหรับ caller/config/auth/error handling ด้วย mocked HTTP แล้ว รวมทั้ง lint/typecheck/production build ผ่าน ยังไม่ได้ตั้ง GitHub secrets/variable หรือเรียก worker บน Vercel จริง ทดสอบเพิ่มเติมการ export SQL Editor 2 กรณีรันบน PGlite และรวมอยู่ในยอด tests ข้างต้น
+
+การลดความหน่วง: webhook ที่บันทึก event สำเร็จปลุก worker ผ่าน Next.js after() หลัง response, drain สูงสุด 5 batches และใช้ scheduler กู้คืนงานค้าง การอัปโหลด/ตรวจ/มอบหมาย/retry ก็ปลุก worker หลัง commit ทดสอบ defer-until-after-response, burst draining, batch/time bounds, sanitized failure, enqueue failure ไม่ปลุก worker และ SQL ingestion ของพนักงานสองคน/ชื่อไม่ตรง/เลขใบลาซ้ำแล้ว กระดิ่ง polling 15 วินาทีพร้อม dedup และ fallback refresh 60 วินาที ยังไม่ได้วัด latency ของการแก้ไขนี้บน production หลัง deploy
 
 - ไม่รัน migration ใน Supabase project จริง และไม่เปลี่ยนข้อมูล/schema `public` ใด ๆ ของผู้ใช้
 - ยังไม่มี credentials จึงไม่ได้ทดสอบ Supabase Auth/SMTP/PostgREST/Storage policies บน project จริง

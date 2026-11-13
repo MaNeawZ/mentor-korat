@@ -30,7 +30,7 @@
 ## Notifications / integrations
 
 - [ ] กระดิ่งและ list เฉพาะผู้มีสิทธิ์, unread/read/read-all และเปิด leave ที่เกี่ยวข้อง
-- [ ] สถานะหน้าเปิดอัปเดตภายในช่วง polling (สูงสุดราว 60 วินาที + เวลาประมวลผล)
+- [ ] webhook ปลุก worker หลังตอบ HTTP โดยไม่รอรอบ schedule; หน้าเปิดตรวจ notification ทุก 15 วินาทีและ fallback refresh ทุก 60 วินาที วัดเวลาจริงหลัง deploy ก่อนรับประกัน latency
 - [ ] Discord private channel มีรายละเอียด/สถานะ/mention ผู้รับผิดชอบจริงและ protected link
 - [ ] ไม่มี raw upload token หรือรูปหลักฐานใน channel กลาง; LINE text ทำให้ mention everyone ไม่ได้
 - [ ] edit mode PATCH message เดิม; events mode แสดง status ของแต่ละ event

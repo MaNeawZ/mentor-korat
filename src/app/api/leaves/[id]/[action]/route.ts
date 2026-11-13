@@ -10,6 +10,8 @@ import { reviewSchema, correctionSchema } from "@/lib/domain";
 import { sessionClient, adminClient } from "@/lib/supabase/server";
 import { deriveToken, newToken } from "@/lib/security";
 import { z } from "zod";
+import { wakeWorker } from "@/lib/worker-wakeup";
+export const maxDuration = 300;
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; action: string }> },
@@ -66,6 +68,7 @@ export async function POST(
         }),
       );
     } else throw new HttpError(404, "ไม่พบรายการ");
+    wakeWorker();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

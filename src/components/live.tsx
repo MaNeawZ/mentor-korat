@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
@@ -17,21 +17,44 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const inFlight = useRef(false);
+  const lastSnapshot = useRef<string | null>(null);
+  const lastRefreshAt = useRef<number | null>(null);
   const poll = useCallback(async () => {
-    if (document.hidden) return;
+    if (document.hidden || inFlight.current) return;
+    inFlight.current = true;
     try {
       const r = await fetch("/api/notifications");
-      if (r.ok) setData(await r.json());
+      if (r.ok) {
+        const next = (await r.json()) as { items: Notice[]; unread: number };
+        const snapshot = JSON.stringify([
+          next.unread,
+          next.items.map((n) => [n.id, n.read_at]),
+        ]);
+        const now = Date.now();
+        if (lastRefreshAt.current === null) lastRefreshAt.current = now;
+        else if (
+          (lastSnapshot.current !== null &&
+            lastSnapshot.current !== snapshot) ||
+          now - lastRefreshAt.current >= 60_000
+        ) {
+          lastRefreshAt.current = now;
+          router.refresh();
+        }
+        lastSnapshot.current = snapshot;
+        setData(next);
+      }
     } catch {
       /* Keep the last successful snapshot while offline. */
+    } finally {
+      inFlight.current = false;
     }
-  }, []);
+  }, [router]);
   useEffect(() => {
     const initial = setTimeout(() => void poll(), 0);
     const id = setInterval(() => {
       void poll();
-      if (!document.hidden) router.refresh();
-    }, 60000);
+    }, 15000);
     document.addEventListener("visibilitychange", poll);
     return () => {
       clearInterval(id);

@@ -9,6 +9,8 @@ import {
 } from "@/lib/api";
 import { employeeSchema, permissions, type Permission } from "@/lib/domain";
 import { sessionClient } from "@/lib/supabase/server";
+import { wakeWorker } from "@/lib/worker-wakeup";
+export const maxDuration = 300;
 const schemas = {
   employee: employeeSchema,
   assignment: z.object({
@@ -74,6 +76,7 @@ export async function POST(
     );
     const db = await sessionClient();
     check(await db.rpc("manage_entity", { kind, payload }));
+    if (kind === "employee" || kind === "assignment") wakeWorker();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

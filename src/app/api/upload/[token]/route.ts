@@ -12,6 +12,8 @@ import { uploadContext } from "@/lib/evidence";
 import { hashToken, imageType, MAX_FILE_BYTES } from "@/lib/security";
 import { adminClient } from "@/lib/supabase/server";
 import { limitedBody } from "@/lib/body";
+import { wakeWorker } from "@/lib/worker-wakeup";
+export const maxDuration = 300;
 export const runtime = "nodejs";
 export async function POST(
   request: Request,
@@ -74,6 +76,7 @@ export async function POST(
     cleanupSafe = !!done.error;
     check(done);
     path = undefined;
+    wakeWorker();
     return NextResponse.json(
       { ok: true },
       { headers: { "Cache-Control": "no-store" } },

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import sharp from "sharp";
+vi.mock("@/lib/worker-wakeup", () => ({ wakeWorker: vi.fn() }));
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   upload: vi.fn(),

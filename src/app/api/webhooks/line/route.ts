@@ -4,6 +4,8 @@ import { verifyLineSignature } from "@/lib/security";
 import { adminClient } from "@/lib/supabase/server";
 import { check, errorResponse, HttpError } from "@/lib/api";
 import { limitedBody } from "@/lib/body";
+import { wakeWorker } from "@/lib/worker-wakeup";
+export const maxDuration = 300;
 const eventSchema = z
   .object({
     webhookEventId: z.string().min(1).max(200),
@@ -67,12 +69,14 @@ export async function POST(request: Request) {
           allowed.has(e.source.groupId),
       )
       .map((e) => ({ id: e.webhookEventId, payload: e }));
-    if (rows.length)
+    if (rows.length) {
       check(
         await db
           .from("integration_events")
           .upsert(rows, { onConflict: "id", ignoreDuplicates: true }),
       );
+      wakeWorker();
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     return errorResponse(e);
