@@ -6,8 +6,8 @@ on:
       - ".github/workflows/process-worker.yml"
       - "scripts/invoke-worker.mjs"
   schedule:
-    # Every five minutes, offset from the start of the hour.
-    - cron: "3-58/5 * * * *"
+    # Standard five-minute expression; updating it also refreshes registration.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 permissions:
   contents: read

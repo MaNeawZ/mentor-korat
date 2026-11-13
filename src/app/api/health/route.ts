@@ -16,7 +16,11 @@ export async function GET() {
       .select("key")
       .limit(1);
     return NextResponse.json(
-      { status: error ? "unhealthy" : "ok" },
+      {
+        status: error ? "unhealthy" : "ok",
+        build: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || null,
+        workerMode: "after-response",
+      },
       { status: error ? 503 : 200, headers: { "Cache-Control": "no-store" } },
     );
   } catch {

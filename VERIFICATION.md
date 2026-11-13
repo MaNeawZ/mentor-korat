@@ -8,7 +8,7 @@
 |---|---|
 | `npm run lint` | ผ่าน ไม่มี error/warning |
 | `npm run typecheck` | ผ่าน TypeScript strict |
-| `npm test` | ผ่าน 80 tests / 7 files หลังเพิ่ม SQL Editor export, external scheduler และ immediate worker wake |
+| `npm test` | ผ่าน 82 tests / 8 files หลังเพิ่ม SQL Editor export, external scheduler, immediate worker wake และ health build metadata |
 | `npm run migrations:check` | ผ่าน 3 migrations พร้อม checksum |
 | `npm run build` | ผ่าน Next.js 16.4.6 production build |
 | `npm run test:browser` | ผ่าน 8 tests บน production server ที่รันในเครื่อง |
@@ -43,6 +43,8 @@ Browser preview / Computer Use ในแอปเปิดไม่ได้จ�
 การแก้ไข external scheduler: ถอด `crons` จาก vercel.json, เพิ่ม GitHub workflow ทุก 5 นาที เปิดเป็นค่าเริ่มต้นและเรียกรอบแรกเมื่อ push เปลี่ยน workflow/caller บน main (ตั้ง repository variable=false เพื่อหยุดได้) เพิ่ม caller script ที่ส่ง bearer header โดยไม่ตาม redirect ทดสอบ 13 กรณีสำหรับ caller/config/auth/error handling ด้วย mocked HTTP แล้ว รวมทั้ง lint/typecheck/production build ผ่าน ตรวจ YAML และเงื่อนไข unset/true/false/manual override แล้ว ทดสอบเพิ่มเติมการ export SQL Editor 2 กรณีรันบน PGlite และรวมอยู่ในยอด tests ข้างต้น
 
 การลดความหน่วง: webhook ที่บันทึก event สำเร็จปลุก worker ผ่าน Next.js after() หลัง response, drain สูงสุด 5 batches และใช้ scheduler กู้คืนงานค้าง การอัปโหลด/ตรวจ/มอบหมาย/retry ก็ปลุก worker หลัง commit ทดสอบ defer-until-after-response, burst draining, batch/time bounds, sanitized failure, enqueue failure ไม่ปลุก worker และ SQL ingestion ของพนักงานสองคน/ชื่อไม่ตรง/เลขใบลาซ้ำแล้ว กระดิ่ง polling 15 วินาทีพร้อม dedup และ fallback refresh 60 วินาที ยังไม่ได้วัด latency ของการแก้ไขนี้บน production หลัง deploy
+
+ตรวจคิววันที่ 14 พฤศจิกายน 2569: พบ LINE event PENDING attempts=0 ข้อมูล parse ครบและตรงกับพนักงาน จึงยังไม่เริ่มประมวลผล ไม่ใช่ Discord ส่งล้มเหลว ขณะตรวจพบเฉพาะ GitHub run จาก push/manual จึงปรับ cron เป็นรูปแบบมาตรฐาน `*/5 * * * *` เพื่อลงทะเบียน schedule ใหม่ และเพิ่ม build/workerMode ใน health response ต้องแยกหลักฐาน run ชนิด schedule ออกจาก push/manual และตรวจ production deployment จริงก่อนยืนยันการปลุกจาก webhook
 
 - ไม่รัน migration ใน Supabase project จริง และไม่เปลี่ยนข้อมูล/schema `public` ใด ๆ ของผู้ใช้
 - ยังไม่มี credentials จึงไม่ได้ทดสอบ Supabase Auth/SMTP/PostgREST/Storage policies บน project จริง

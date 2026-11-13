@@ -118,6 +118,8 @@ Migration runner ใช้ advisory transaction lock, version/checksum history, 
 
 ตรวจ `/api/health`, queue depth/FAILED และจำนวน parsing issues เป็นประจำ ตรวจ external scheduler ทำงานตามรอบที่เลือก งาน PROCESSING หมด lease หลัง 5 นาทีจึงพร้อมให้ worker รอบถัดไป claim ใหม่ FAILED ลองใหม่ได้ด้วย `POST /api/queues/retry` หรือปุ่มในหน้าการเชื่อมต่อ พร้อมยืนยันและ audit
 
+Health response ของเวอร์ชันล่าสุดมี `build` (commit สั้น ถ้า Vercel ให้ค่า metadata) และ `workerMode: "after-response"` สำหรับแยกเว็บเวอร์ชันเก่าที่ยังไม่ปลุก worker หากตอบเพียง `status` อย่าเพิ่งสรุปว่า immediate worker ถูก deploy แล้ว และอย่าใช้ผล run จาก event `push`/`workflow_dispatch` แทนหลักฐานว่า event `schedule` ทำงาน ตรวจชนิด event ของ run จริงใน GitHub ด้วย
+
 ปิด request URL/body logging และ analytics สำหรับ `/upload/*` และ `/api/upload/*` ที่ reverse proxy/APM/CDN เนื่องจาก URL มี bearer token ห้าม paste token ใน ticket/log หรือแชร์ช่องกลาง หน้า upload ไม่ใส่ tracker และตั้ง no-referrer
 
 ทบทวน retention_days กับฝ่ายบุคคล กำหนด backup และผู้เข้าถึง เหตุผลทางสุขภาพและหลักฐานไม่ควรเก็บเกินนโยบาย ไม่มี scheduled deletion ที่อาจลบหลักฐานโดยไม่ทบทวน การ reconcile orphan storage ต้องเทียบ metadata และอายุ >24h ก่อนเจ้าของระบบอนุมัติลบผ่าน Storage API
