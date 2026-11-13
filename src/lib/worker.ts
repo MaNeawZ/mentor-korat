@@ -3,7 +3,7 @@ import { adminClient } from "./supabase/server";
 import { check } from "./api";
 import { deriveToken } from "./security";
 import { loadLeaveTypes, ingestLineJob } from "./line/ingest";
-import { discordPayload } from "./discord";
+import { discordPayload, discordStatusNotification } from "./discord";
 import { statuses, type Status } from "./domain";
 import { processEvidenceCleanup } from "./storage-cleanup";
 class DeliveryError extends Error {
@@ -93,6 +93,7 @@ export async function runWorker() {
             .eq("id", l.mentor_id)
             .single()
         : null;
+      if (mentor) check(mentor);
       const map = await db
         .from("discord_messages")
         .select("message_id")
@@ -127,11 +128,7 @@ export async function runWorker() {
           id: l.id,
           document_number: l.document_number,
           reason: l.reason,
-          status:
-            mode.data?.value === "events" &&
-            statuses.includes(job.kind as Status)
-              ? (job.kind as Status)
-              : (l.status as Status),
+          status: l.status as Status,
           leave_date: l.leave_date,
           leave_type: l.leave_type,
           employee_code: l.employees.code,
@@ -141,12 +138,17 @@ export async function runWorker() {
         },
         process.env.NEXT_PUBLIC_APP_URL!,
         uploadUrl,
+        statuses.includes(job.kind as Status)
+          ? (job.kind as Status)
+          : undefined,
       );
       let message;
+      let editedExisting = false;
       if (map.data && mode.data?.value === "edit") {
         base.pathname += `/messages/${map.data.message_id}`;
         try {
           message = await discordRequest(base.toString(), payload, "PATCH");
+          editedExisting = true;
         } catch (e) {
           if (!(e instanceof DeliveryError) || e.code !== "DISCORD_404")
             throw e;
@@ -167,6 +169,30 @@ export async function runWorker() {
             .from("discord_messages")
             .upsert({ leave_id: l.id, message_id: message.id }),
         );
+      // Keep the original card current, and create a new notification for each
+      // status event. A plain edit alone is not our notification mechanism.
+      // A new card (including a 404 fallback) already carries the mentor mention.
+      if (
+        editedExisting &&
+        statuses.includes(job.kind as Status) &&
+        job.kind !== "WAITING_EVIDENCE"
+      ) {
+        const noticeUrl = new URL(process.env.DISCORD_WEBHOOK_URL);
+        noticeUrl.searchParams.set("wait", "true");
+        await discordRequest(
+          noticeUrl.toString(),
+          discordStatusNotification(
+            {
+              id: l.id,
+              document_number: l.document_number,
+              status: l.status as Status,
+              discord_user_id: mentor?.data?.discord_user_id || null,
+            },
+            job.kind as Status,
+            process.env.NEXT_PUBLIC_APP_URL!,
+          ),
+        );
+      }
       if (
         process.env.DISCORD_BOT_TOKEN &&
         uploadUrl &&

@@ -40,6 +40,8 @@ Browser preview / Computer Use ในแอปเปิดไม่ได้จ�
 
 ## สิ่งที่ยังไม่ได้ทดสอบ / ไม่ได้ดำเนินการ
 
+แจ้งเปลี่ยนสถานะและแท็ก Mentor ใน Discord: ผ่าน 128 tests ใน 13 ไฟล์ รวมทั้ง lint/typecheck/build ทดสอบ edit mode PATCH การ์ดสถานะล่าสุดแล้ว POST ข้อความใหม่พร้อม mention สำหรับทั้ง 5 สถานะหลังสร้างใบลา, คง mapping การ์ดเดิม, events mode ส่งครั้งเดียว, งานล่าช้าแยกสถานะ event กับปัจจุบัน, POST ล้มเหลวคงคิว, PATCH 404 สร้างการ์ดใหม่โดยไม่ส่ง notice ซ้ำ และ ID Mentor ไม่มี/ไม่ถูกต้องไม่สร้าง mention เดาเพิ่ม SQL integration ตรวจ outbox ทุกช่วงสถานะสำเร็จด้วย ไม่เปลี่ยน DB และไม่ได้ส่ง Discord จริงระหว่างพัฒนา การแจ้งเตือนบนอุปกรณ์ขึ้นกับ Discord settings ของผู้รับและยังต้อง smoke test หลัง deploy
+
 แนบ active upload link ใน Discord embed ให้ Mentor ส่งต่อพนักงานตามคำขอผู้ใช้: ทดสอบ WAITING_EVIDENCE/REUPLOAD_REQUIRED โดยไม่ใช้ bot token, URL ตรงกับ token เดิม, ไม่ส่ง nonce, ไม่มีการ rotate เมื่อ retry, ลิงก์หายจาก PATCH หลังอัปโหลด และไม่แนบให้ event สถานะเก่าที่ใบลาปัจจุบัน verified แล้ว ผ่านรวม 118 tests ใน 13 ไฟล์ พร้อม lint/typecheck/build ไม่ต้องแก้ DB หรือเพิ่ม migration ไม่ได้ส่งข้อความจริงหรือย้อนอัปเดต Discord messages ที่ส่งสำเร็จไปแล้วระหว่างพัฒนา
 
 เพิ่มการล้าง audit เก่าทั้งหมดตามขอบเขตที่ผู้ใช้เลือก: ปุ่มแยกในหน้าตั้งค่าและหน้าประวัติ ทดสอบ role/active/permission/anonymous, คำยืนยันเฉพาะ/เหตุผล, stale preview, การลบ audit เก่ารวมการจัดการพนักงานและการตั้งค่าโดยคงบันทึกการล้างใหม่ 1 รายการ และไม่ลบใบลา/ข้อมูลหลัก/Auth/public/คิวไฟล์หลักฐาน ผ่าน 113 tests ใน 13 ไฟล์ พร้อม lint/typecheck/build และ migration check 6 ไฟล์ ใช้ PGlite และ API mocks เท่านั้น ไม่ได้ล้างประวัติจริงหรือติดตั้ง migration `202611140003_clear_audit_history.sql` บน production และยังไม่ได้ตรวจ UI ใหม่ผ่าน authenticated production browser

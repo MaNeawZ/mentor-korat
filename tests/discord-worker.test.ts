@@ -6,11 +6,14 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/auth", () => ({ currentUser: vi.fn() }));
 import { runWorker } from "../src/lib/worker";
 import { newToken, hashToken } from "../src/lib/security";
+import { statusLabels, type Status } from "../src/lib/domain";
 let leaveStatus = "WAITING_EVIDENCE",
   nonce: string | null = null,
   messageId: string | null = null;
 let mode = "edit",
   jobKind = "WAITING_EVIDENCE";
+let mentorAssigned = false,
+  mentorDiscordId: string | null = null;
 const writes: {
   table: string;
   operation: string;
@@ -30,7 +33,7 @@ function query(table: string) {
             leave_date: "2026-11-14",
             leave_type: "ลาป่วย",
             reason: "ข้อมูลทดสอบ",
-            mentor_id: null,
+            mentor_id: mentorAssigned ? "mentor-id" : null,
             employees: {
               code: "12345",
               name: "พนักงาน ทดสอบ",
@@ -44,7 +47,9 @@ function query(table: string) {
           ? { nonce }
           : table === "discord_messages" && messageId
             ? { message_id: messageId }
-            : null;
+            : table === "app_users"
+              ? { discord_user_id: mentorDiscordId }
+              : null;
   q.select = () => q;
   q.eq = (key: string, value: unknown) => {
     filters[key] = value;
@@ -69,6 +74,8 @@ beforeEach(() => {
   messageId = null;
   mode = "edit";
   jobKind = "WAITING_EVIDENCE";
+  mentorAssigned = false;
+  mentorDiscordId = null;
   writes.length = 0;
   mocks.from.mockReset();
   mocks.rpc.mockReset();
@@ -222,3 +229,135 @@ it("reuses the same active link on delivery retry", async () => {
     writes.filter((w) => w.table === "evidence_upload_tokens"),
   ).toHaveLength(0);
 });
+it.each([
+  "WAITING_MENTOR_REVIEW",
+  "WAITING_FINAL_REVIEW",
+  "VERIFIED",
+  "REUPLOAD_REQUIRED",
+  "REJECTED",
+] as Status[])(
+  "updates the existing card and posts a new mentor mention for status %s in edit mode",
+  async (status) => {
+    leaveStatus = status;
+    jobKind = status;
+    messageId = "original-card";
+    mentorAssigned = true;
+    mentorDiscordId = "234567890123456789";
+    const send = vi.fn<
+      (url: string, options: RequestInit) => Promise<Response>
+    >(async (_url, options) =>
+      Response.json({
+        id: options.method === "PATCH" ? "original-card" : "status-notice",
+      }),
+    );
+    vi.stubGlobal("fetch", send);
+    expect(await runWorker()).toEqual({ processed: 1 });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[0][1].method).toBe("PATCH");
+    const card = JSON.parse(send.mock.calls[0][1].body as string);
+    expect(card.embeds[0].title).toContain(statusLabels[status]);
+    expect(card.embeds[0].fields).toContainEqual({
+      name: "สถานะ",
+      value: statusLabels[status],
+    });
+    expect(send.mock.calls[1][1].method).toBe("POST");
+    const notification = JSON.parse(send.mock.calls[1][1].body as string);
+    expect(notification.content).toContain("<@234567890123456789>");
+    expect(notification.content).toContain("LE-256911001234");
+    expect(notification.content).toContain(statusLabels[status]);
+    expect(notification.content).toContain("/leaves/leave-id");
+    expect(notification.allowed_mentions).toEqual({
+      parse: [],
+      users: ["234567890123456789"],
+    });
+    const mappings = writes.filter((w) => w.table === "discord_messages");
+    expect(mappings).toHaveLength(1);
+    expect(mappings[0].value.message_id).toBe("original-card");
+  },
+);
+it("posts a single mentioned card in events mode and shows both the event and current state for delayed jobs", async () => {
+  mode = "events";
+  leaveStatus = "VERIFIED";
+  jobKind = "WAITING_FINAL_REVIEW";
+  messageId = "older-card";
+  mentorAssigned = true;
+  mentorDiscordId = "234567890123456789";
+  const send = vi.fn<(url: string, options: RequestInit) => Promise<Response>>(
+    async () => Response.json({ id: "new-event-card" }),
+  );
+  vi.stubGlobal("fetch", send);
+  await runWorker();
+  expect(send).toHaveBeenCalledOnce();
+  expect(send.mock.calls[0][1].method).toBe("POST");
+  const card = JSON.parse(send.mock.calls[0][1].body as string);
+  expect(card.content).toContain("<@234567890123456789>");
+  expect(card.embeds[0].fields).toContainEqual({
+    name: "สถานะ",
+    value: statusLabels.VERIFIED,
+  });
+  expect(card.embeds[0].fields).toContainEqual({
+    name: "สถานะของเหตุการณ์นี้",
+    value: statusLabels.WAITING_FINAL_REVIEW,
+  });
+});
+it("keeps the event pending until the new status notification succeeds, even after the card edit succeeds", async () => {
+  leaveStatus = "VERIFIED";
+  jobKind = "VERIFIED";
+  messageId = "original-card";
+  mentorAssigned = true;
+  mentorDiscordId = "234567890123456789";
+  const send = vi.fn<(url: string, options: RequestInit) => Promise<Response>>(
+    async (_url, options) =>
+      options.method === "PATCH"
+        ? Response.json({ id: "original-card" })
+        : Response.json({ retry_after: 60 }, { status: 429 }),
+  );
+  vi.stubGlobal("fetch", send);
+  expect(await runWorker()).toEqual({ processed: 0 });
+  expect(
+    writes.find((w) => w.table === "notification_outbox")?.value,
+  ).toMatchObject({ status: "PENDING", error_code: "DISCORD_429" });
+  expect(
+    writes.some(
+      (w) => w.table === "notification_outbox" && w.value.status === "DONE",
+    ),
+  ).toBe(false);
+});
+it("recreates a missing card with the mentor mention without posting a second notification", async () => {
+  leaveStatus = "VERIFIED";
+  jobKind = "VERIFIED";
+  messageId = "missing-card";
+  mentorAssigned = true;
+  mentorDiscordId = "234567890123456789";
+  const send = vi.fn<(url: string, options: RequestInit) => Promise<Response>>(
+    async (_url, options) =>
+      options.method === "PATCH"
+        ? Response.json({ message: "not found" }, { status: 404 })
+        : Response.json({ id: "replacement-card" }),
+  );
+  vi.stubGlobal("fetch", send);
+  expect(await runWorker()).toEqual({ processed: 1 });
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(
+    JSON.parse(send.mock.calls[1][1].body as string).allowed_mentions,
+  ).toEqual({ parse: [], users: ["234567890123456789"] });
+});
+it.each([null, "@everyone"])(
+  "does not invent a mentor mention when the mapped ID is %s",
+  async (id) => {
+    leaveStatus = "VERIFIED";
+    jobKind = "VERIFIED";
+    messageId = "original-card";
+    mentorAssigned = true;
+    mentorDiscordId = id;
+    const send = vi.fn<
+      (url: string, options: RequestInit) => Promise<Response>
+    >(async () => Response.json({ id: "message" }));
+    vi.stubGlobal("fetch", send);
+    await runWorker();
+    const notification = JSON.parse(send.mock.calls[1][1].body as string);
+    expect(notification.allowed_mentions).toEqual({ parse: [], users: [] });
+    expect(notification.content).not.toContain("@everyone");
+    expect(notification.content).not.toContain("<@");
+  },
+);

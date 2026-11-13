@@ -67,6 +67,8 @@ Discord outbox แยก transaction จากการส่งจริง web
 
 Discord embed แนบ active upload link ตามคำขอผู้ใช้สำหรับ Mentor ส่งต่อพนักงานในสถานะปัจจุบัน WAITING_EVIDENCE/REUPLOAD_REQUIRED โดย reconstruct ด้วย nonce/secret เดียวกับ protected link endpoint ไม่หมุน token ในขั้นตอน delivery ใช้ได้โดยไม่มี bot token และ optional DM ใช้ URL เดียวกัน หาก events แสดงสถานะเก่าแต่ปัจจุบันพ้นรออัปโหลดแล้วจะไม่แนบ token
 
+การ์ด Discord แสดงสถานะปัจจุบันในหัวข้อและ field ทุกโหมด เพิ่มสถานะของเหตุการณ์เมื่อไม่ตรงกับปัจจุบัน โหมด edit เมื่อ PATCH สำเร็จและ job เป็นการเปลี่ยนสถานะจะ POST ข้อความแจ้งใหม่พร้อม allowed_mentions เฉพาะ Mentor และเก็บ mapping ของการ์ดเดิมไว้ โหมด events หรือ fallback สร้างการ์ดใหม่เมื่อการ์ดถูกลบ ใช้ mention บนการ์ดใหม่นั้นโดยไม่ส่งซ้ำอีกข้อความ Queue DONE หลังส่งการ์ดและข้อความแจ้งใหม่สำเร็จทั้งคู่ ไม่มี migration ใหม่เพราะ transaction อัปโหลด/ตรวจหลักฐานบันทึก outbox อยู่แล้ว
+
 External webhook ไม่มี distributed transaction กับ DB จึงรับประกัน exactly-once ไม่ได้เมื่อ Discord รับข้อความแล้ว network ขาดก่อนบันทึก ID อาจเห็นข้อความซ้ำได้ กรณีปกติ retry ใช้ message ID ที่บันทึกแล้วและไม่มี worker ส่งซ้อนกัน ห้ามอ้าง exactly-once ภายนอก
 
 ## Performance budget

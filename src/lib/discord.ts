@@ -1,4 +1,33 @@
 import { statusLabels, type Status } from "./domain";
+function mentorMention(id: string | null) {
+  return id && /^\d{15,22}$/.test(id) ? id : null;
+}
+export function discordStatusNotification(
+  leave: {
+    id: string;
+    document_number: string;
+    status: Status;
+    discord_user_id: string | null;
+  },
+  changedStatus: Status,
+  appUrl: string,
+) {
+  const mention = mentorMention(leave.discord_user_id);
+  return {
+    content: [
+      mention ? `<@${mention}>` : null,
+      `🔄 เปลี่ยนสถานะใบลา ${leave.document_number}`,
+      `สถานะที่เปลี่ยน: ${statusLabels[changedStatus]}`,
+      changedStatus !== leave.status
+        ? `สถานะล่าสุด: ${statusLabels[leave.status]}`
+        : null,
+      new URL(`/leaves/${leave.id}`, appUrl).toString(),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    allowed_mentions: { parse: [], users: mention ? [mention] : [] },
+  };
+}
 export function discordPayload(
   l: {
     id: string;
@@ -14,17 +43,15 @@ export function discordPayload(
   },
   appUrl: string,
   uploadUrl?: string,
+  eventStatus?: Status,
 ) {
-  const mention =
-    l.discord_user_id && /^\d{15,22}$/.test(l.discord_user_id)
-      ? l.discord_user_id
-      : null;
+  const mention = mentorMention(l.discord_user_id);
   return {
     content: mention ? `<@${mention}>` : undefined,
     allowed_mentions: { parse: [], users: mention ? [mention] : [] },
     embeds: [
       {
-        title: "📋 แจ้งการลาพนักงาน",
+        title: `📋 ใบลา · ${statusLabels[l.status]}`,
         url: `${appUrl}/leaves/${l.id}`,
         color: l.status === "VERIFIED" ? 0x10b981 : 0x6366f1,
         fields: [
@@ -41,6 +68,9 @@ export function discordPayload(
           { name: "เหตุผล", value: l.reason.slice(0, 1024) || "—" },
           { name: "เลขที่ใบลา", value: l.document_number },
           { name: "สถานะ", value: statusLabels[l.status] },
+          ...(eventStatus && eventStatus !== l.status
+            ? [{ name: "สถานะของเหตุการณ์นี้", value: statusLabels[eventStatus] }]
+            : []),
           ...(uploadUrl &&
           ["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(l.status)
             ? [

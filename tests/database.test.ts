@@ -242,6 +242,19 @@ describe("real PostgreSQL transaction and RLS integration (isolated PGlite)", ()
         )?.n,
       ),
     ).toBeGreaterThan(4);
+    const queued = await db.query<{ kind: string }>(
+      "SELECT DISTINCT kind FROM mentor_korat.notification_outbox WHERE leave_id=$1",
+      [lid],
+    );
+    expect(queued.rows.map((row) => row.kind)).toEqual(
+      expect.arrayContaining([
+        "WAITING_EVIDENCE",
+        "WAITING_MENTOR_REVIEW",
+        "REUPLOAD_REQUIRED",
+        "WAITING_FINAL_REVIEW",
+        "VERIFIED",
+      ]),
+    );
   });
   it("honors HR permission overrides and disabled accounts immediately", async () => {
     await admin();

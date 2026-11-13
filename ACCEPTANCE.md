@@ -34,6 +34,7 @@
 - [ ] Discord private channel มีรายละเอียด/สถานะ/mention ผู้รับผิดชอบจริงและ protected link
 - [ ] ห้อง Discord จำกัดสมาชิก แนบ active upload link ให้ Mentor ส่งต่อเฉพาะสถานะรอหลักฐาน/ขอใหม่ และใช้ได้ครั้งเดียว ไม่มีรูปหลักฐานในห้อง; LINE text ทำให้ mention everyone ไม่ได้
 - [ ] โหมด edit เอาลิงก์ออกหลังอัปโหลด โหมด events แม้มีข้อความลิงก์เก่าค้างอยู่ token ที่ใช้แล้ว/ยกเลิกแล้วต้องใช้ไม่ได้
+- [ ] อัปโหลด/ตรวจขั้นต้น/ตรวจขั้นสุดท้าย/ขอใหม่/ปฏิเสธ แสดงสถานะล่าสุดใน Discord และส่งข้อความใหม่แท็ก Mentor ที่ผูก ID ไว้แม้ใช้โหมด edit; โหมด events ไม่ส่งข้อความแจ้งเพิ่มซ้ำ และไม่แจ้ง DONE หากข้อความใหม่ส่งไม่สำเร็จ
 - [ ] edit mode PATCH message เดิม; events mode แสดง status ของแต่ละ event
 - [ ] simulated Discord 429/outage มี retry/backoff; ใบลาบันทึกสำเร็จแม้ส่ง Discord ไม่ได้
 - [ ] optional DM ส่งให้ Mentor mapping จริง; DM ไม่ได้มีเว็บแจ้ง fallback

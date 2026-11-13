@@ -18,7 +18,7 @@ export default async function Discord() {
     <>
       <PageHeader
         title="การเชื่อมต่อ Discord"
-        description="แจ้งสถานะไปยังช่องส่วนตัว และส่งลิงก์จริงผ่าน Mentor"
+        description="แสดงสถานะล่าสุด แจ้งทุกการเปลี่ยนสถานะพร้อมแท็ก Mentor และแนบลิงก์ส่งต่อพนักงาน"
       />
       <SettingsTabs />
       <section className="panel detail-panel">
