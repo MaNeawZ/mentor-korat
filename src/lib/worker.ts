@@ -105,6 +105,23 @@ export async function runWorker() {
         !base.pathname.startsWith("/api/webhooks/")
       )
         throw new DeliveryError("DISCORD_URL_INVALID");
+      let uploadUrl: string | undefined;
+      // Reuse the existing ACTIVE link; delivery retries must not rotate it.
+      // Check current state, even when events mode renders an older status.
+      if (["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(l.status)) {
+        const token = await db
+          .from("evidence_upload_tokens")
+          .select("nonce")
+          .eq("leave_id", l.id)
+          .eq("state", "ACTIVE")
+          .maybeSingle();
+        check(token);
+        if (token.data)
+          uploadUrl = new URL(
+            `/upload/${deriveToken(token.data.nonce, process.env.UPLOAD_TOKEN_SECRET || "")}`,
+            process.env.NEXT_PUBLIC_APP_URL,
+          ).toString();
+      }
       const payload = discordPayload(
         {
           id: l.id,
@@ -123,6 +140,7 @@ export async function runWorker() {
           discord_user_id: mentor?.data?.discord_user_id || null,
         },
         process.env.NEXT_PUBLIC_APP_URL!,
+        uploadUrl,
       );
       let message;
       if (map.data && mode.data?.value === "edit") {
@@ -151,35 +169,27 @@ export async function runWorker() {
         );
       if (
         process.env.DISCORD_BOT_TOKEN &&
+        uploadUrl &&
         mentor?.data?.discord_user_id &&
         ["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(job.kind) &&
         ["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(l.status)
       ) {
         try {
-          const token = await db
-            .from("evidence_upload_tokens")
-            .select("nonce")
-            .eq("leave_id", l.id)
-            .eq("state", "ACTIVE")
-            .maybeSingle();
-          check(token);
-          if (token.data) {
-            const dm = await discordRequest(
-              "https://discord.com/api/v10/users/@me/channels",
-              { recipient_id: mentor.data.discord_user_id },
-              "POST",
-              true,
-            );
-            await discordRequest(
-              `https://discord.com/api/v10/channels/${dm.id}/messages`,
-              {
-                content: `ลิงก์อัปโหลด ${l.document_number}\n${process.env.NEXT_PUBLIC_APP_URL}/upload/${deriveToken(token.data.nonce, process.env.UPLOAD_TOKEN_SECRET || "")}`,
-                allowed_mentions: { parse: [] },
-              },
-              "POST",
-              true,
-            );
-          }
+          const dm = await discordRequest(
+            "https://discord.com/api/v10/users/@me/channels",
+            { recipient_id: mentor.data.discord_user_id },
+            "POST",
+            true,
+          );
+          await discordRequest(
+            `https://discord.com/api/v10/channels/${dm.id}/messages`,
+            {
+              content: `ลิงก์อัปโหลด ${l.document_number}\n${uploadUrl}`,
+              allowed_mentions: { parse: [] },
+            },
+            "POST",
+            true,
+          );
         } catch {
           check(
             await db.from("notifications").insert({

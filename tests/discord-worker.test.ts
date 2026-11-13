@@ -5,6 +5,12 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/auth", () => ({ currentUser: vi.fn() }));
 import { runWorker } from "../src/lib/worker";
+import { newToken, hashToken } from "../src/lib/security";
+let leaveStatus = "WAITING_EVIDENCE",
+  nonce: string | null = null,
+  messageId: string | null = null;
+let mode = "edit",
+  jobKind = "WAITING_EVIDENCE";
 const writes: {
   table: string;
   operation: string;
@@ -15,12 +21,12 @@ function query(table: string) {
   const q: Record<string, unknown> = {};
   const data = () =>
     table === "app_settings"
-      ? { value: filters.key === "leave_types" ? ["ลาป่วย"] : "edit" }
+      ? { value: filters.key === "leave_types" ? ["ลาป่วย"] : mode }
       : table === "leave_requests"
         ? {
             id: "leave-id",
             document_number: "LE-256911001234",
-            status: "WAITING_EVIDENCE",
+            status: leaveStatus,
             leave_date: "2026-11-14",
             leave_type: "ลาป่วย",
             reason: "ข้อมูลทดสอบ",
@@ -31,7 +37,14 @@ function query(table: string) {
               departments: { name: "Development" },
             },
           }
-        : null;
+        : table === "evidence_upload_tokens" &&
+            nonce &&
+            filters.state === "ACTIVE" &&
+            filters.leave_id === "leave-id"
+          ? { nonce }
+          : table === "discord_messages" && messageId
+            ? { message_id: messageId }
+            : null;
   q.select = () => q;
   q.eq = (key: string, value: unknown) => {
     filters[key] = value;
@@ -51,6 +64,11 @@ function query(table: string) {
   return q;
 }
 beforeEach(() => {
+  leaveStatus = "WAITING_EVIDENCE";
+  nonce = null;
+  messageId = null;
+  mode = "edit";
+  jobKind = "WAITING_EVIDENCE";
   writes.length = 0;
   mocks.from.mockReset();
   mocks.rpc.mockReset();
@@ -67,7 +85,7 @@ beforeEach(() => {
                 {
                   id: "outbox-id",
                   leave_id: "leave-id",
-                  kind: "WAITING_EVIDENCE",
+                  kind: jobKind,
                   attempts: 1,
                 },
               ],
@@ -81,12 +99,13 @@ beforeEach(() => {
   );
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://example.com");
   vi.stubEnv("DISCORD_BOT_TOKEN", "");
+  vi.stubEnv("UPLOAD_TOKEN_SECRET", "s".repeat(40));
 });
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
-it("sends the committed leave to Discord immediately and records delivery without exposing upload tokens", async () => {
+it("sends the committed leave to Discord and omits an upload link when none is active", async () => {
   const send = vi.fn(async () => Response.json({ id: "discord-message-id" }));
   vi.stubGlobal("fetch", send);
   expect(await runWorker()).toEqual({ processed: 1 });
@@ -134,4 +153,72 @@ it("keeps the committed leave and retries only delivery when Discord is unavaila
     writes.find((w) => w.table === "notification_outbox")?.value,
   ).toMatchObject({ status: "PENDING", error_code: "DELIVERY_FAILED" });
   expect(writes.some((w) => w.table === "leave_requests")).toBe(false);
+});
+it.each(["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"])(
+  "includes the existing single-use upload link in the channel for %s without requiring a bot token",
+  async (status) => {
+    leaveStatus = status;
+    const token = newToken("s".repeat(40));
+    nonce = token.nonce;
+    const send = vi.fn<
+      (url: string, options: RequestInit) => Promise<Response>
+    >(async () => Response.json({ id: "discord-message-id" }));
+    vi.stubGlobal("fetch", send);
+    expect(await runWorker()).toEqual({ processed: 1 });
+    expect(send).toHaveBeenCalledOnce();
+    const payload = JSON.parse(send.mock.calls[0][1].body as string);
+    const field = payload.embeds[0].fields.find((f: { name: string }) =>
+      f.name.includes("ลิงก์อัปโหลด"),
+    );
+    expect(field.value).toContain(`https://example.com/upload/${token.token}`);
+    expect(field.value).toContain("ส่งให้พนักงาน");
+    const url = field.value.split("\n")[0];
+    expect(hashToken(new URL(url).pathname.split("/").pop()!)).toBe(token.hash);
+    expect(JSON.stringify(payload)).not.toContain(token.nonce);
+    expect(payload.allowed_mentions).toEqual({ parse: [], users: [] });
+    expect(mocks.rpc.mock.calls.some(([name]) => name === "rotate_token")).toBe(
+      false,
+    );
+  },
+);
+it("edits the existing Discord message without an upload link after evidence has been submitted", async () => {
+  leaveStatus = "WAITING_MENTOR_REVIEW";
+  messageId = "existing-message";
+  nonce = "a".repeat(64);
+  const send = vi.fn<(url: string, options: RequestInit) => Promise<Response>>(
+    async () => Response.json({ id: "existing-message" }),
+  );
+  vi.stubGlobal("fetch", send);
+  await runWorker();
+  expect(send.mock.calls[0][0]).toContain("/messages/existing-message");
+  expect(send.mock.calls[0][1].method).toBe("PATCH");
+  expect(send.mock.calls[0][1].body).not.toContain("/upload/");
+});
+it("does not attach a live link to an old waiting event when the current leave is verified", async () => {
+  leaveStatus = "VERIFIED";
+  mode = "events";
+  jobKind = "WAITING_EVIDENCE";
+  nonce = "a".repeat(64);
+  const send = vi.fn<(url: string, options: RequestInit) => Promise<Response>>(
+    async () => Response.json({ id: "event-message" }),
+  );
+  vi.stubGlobal("fetch", send);
+  await runWorker();
+  expect(send.mock.calls[0][1].body).not.toContain("/upload/");
+});
+it("reuses the same active link on delivery retry", async () => {
+  const token = newToken("s".repeat(40));
+  nonce = token.nonce;
+  const send = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ retry_after: 1 }, { status: 429 }))
+    .mockResolvedValueOnce(Response.json({ id: "retried-message" }));
+  vi.stubGlobal("fetch", send);
+  expect(await runWorker()).toEqual({ processed: 0 });
+  expect(await runWorker()).toEqual({ processed: 1 });
+  for (const [, options] of send.mock.calls)
+    expect(options.body).toContain(`/upload/${token.token}`);
+  expect(
+    writes.filter((w) => w.table === "evidence_upload_tokens"),
+  ).toHaveLength(0);
 });

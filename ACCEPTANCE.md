@@ -32,7 +32,8 @@
 - [ ] กระดิ่งและ list เฉพาะผู้มีสิทธิ์, unread/read/read-all และเปิด leave ที่เกี่ยวข้อง
 - [ ] webhook บันทึกใบลา/แจ้งเตือนเว็บผ่าน fast path ก่อนตอบ HTTP และส่ง Discord ต่อหลัง response โดยไม่รอรอบ schedule; หน้าเปิดตรวจ notification ทุก 5 วินาทีและ fallback refresh ทุก 60 วินาที วัดเวลาจริงหลัง deploy ก่อนรับประกัน latency
 - [ ] Discord private channel มีรายละเอียด/สถานะ/mention ผู้รับผิดชอบจริงและ protected link
-- [ ] ไม่มี raw upload token หรือรูปหลักฐานใน channel กลาง; LINE text ทำให้ mention everyone ไม่ได้
+- [ ] ห้อง Discord จำกัดสมาชิก แนบ active upload link ให้ Mentor ส่งต่อเฉพาะสถานะรอหลักฐาน/ขอใหม่ และใช้ได้ครั้งเดียว ไม่มีรูปหลักฐานในห้อง; LINE text ทำให้ mention everyone ไม่ได้
+- [ ] โหมด edit เอาลิงก์ออกหลังอัปโหลด โหมด events แม้มีข้อความลิงก์เก่าค้างอยู่ token ที่ใช้แล้ว/ยกเลิกแล้วต้องใช้ไม่ได้
 - [ ] edit mode PATCH message เดิม; events mode แสดง status ของแต่ละ event
 - [ ] simulated Discord 429/outage มี retry/backoff; ใบลาบันทึกสำเร็จแม้ส่ง Discord ไม่ได้
 - [ ] optional DM ส่งให้ Mentor mapping จริง; DM ไม่ได้มีเว็บแจ้ง fallback

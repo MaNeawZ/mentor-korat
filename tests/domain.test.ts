@@ -135,7 +135,7 @@ describe("review policy", () => {
         .success,
     ).toBe(false);
   });
-  it("does not allow mentions injected through LINE content or expose upload token", () => {
+  it("blocks injected mentions and omits upload links unless explicitly supplied", () => {
     const p = discordPayload(
       {
         id: "x",

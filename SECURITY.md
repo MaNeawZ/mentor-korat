@@ -22,7 +22,7 @@ Private bucket เท่านั้น ไม่ใช้ public URL ห้า�
 
 Upload จำกัดขนาด/bytes แม้ไม่มี Content-Length ตรวจ MIME และ magic bytes แล้ว decode จริงผ่าน sharp จำกัด input pixels resize/normalize/WebP ล้าง metadata ไม่ยอมรับ SVG/PDF/GIF ไม่ใช้ filename ที่ผู้ใช้ส่งมา สุ่ม object path ป้องกัน overwrite และยกเลิก token เฉพาะหลัง commit metadata
 
-Token URL เป็น bearer credential ต้องตั้ง request-log redaction ใน infrastructure ทั้งหมด no-referrer และ no third-party analytics ช่วยลดการรั่ว แต่ไม่แทนการป้องกันฝั่ง CDN/APM กลุ่ม Discord กลางมี dashboard link เท่านั้น DM ส่ง raw link เฉพาะ Mentor ที่ map ถูกต้อง
+Token URL เป็น bearer credential ต้องตั้ง request-log redaction ใน infrastructure ทั้งหมด no-referrer และ no third-party analytics ช่วยลดการรั่ว แต่ไม่แทนการป้องกันฝั่ง CDN/APM ตามขอบเขตที่ผู้ใช้ขอ ข้อความ Discord แนบ active upload link ให้ Mentor ส่งต่อพนักงานเมื่อสถานะปัจจุบันรอหลักฐาน/ขอใหม่ คนที่อ่านห้องนั้นจะใช้ลิงก์อัปโหลดได้โดยไม่ต้อง login จึงใช้ห้อง private ที่จำกัดสมาชิก การ retry ใช้ token เดิม ไม่ rotate; token ใช้ได้ครั้งเดียว และถูก revoke เมื่อขอหลักฐานใหม่ โหมด edit เอาลิงก์ออกเมื่อสถานะพ้นรออัปโหลด ส่วนข้อความ events เก่าที่มีลิงก์ยังคงอยู่แต่ server ปฏิเสธ token ที่ใช้แล้ว/ยกเลิกแล้ว Optional DM ใช้ลิงก์ active เดียวกัน
 
 ## Request security
 

@@ -65,6 +65,8 @@ Discord outbox แยก transaction จากการส่งจริง web
 
 เก็บ Discord message ID เพื่อ PATCH สถานะล่าสุด ตั้ง mode เป็น events ได้สำหรับข้อความใหม่ ปิด allowed_mentions parse ทั้งหมดและอนุญาตเฉพาะ Mentor ID ที่ map ใน DB ข้อความจาก LINE ทำให้ mention คนอื่นไม่ได้ Bot DM เป็น optional; ล้มเหลวแจ้ง Mentor ในเว็บให้คัดลอกลิงก์เอง
 
+Discord embed แนบ active upload link ตามคำขอผู้ใช้สำหรับ Mentor ส่งต่อพนักงานในสถานะปัจจุบัน WAITING_EVIDENCE/REUPLOAD_REQUIRED โดย reconstruct ด้วย nonce/secret เดียวกับ protected link endpoint ไม่หมุน token ในขั้นตอน delivery ใช้ได้โดยไม่มี bot token และ optional DM ใช้ URL เดียวกัน หาก events แสดงสถานะเก่าแต่ปัจจุบันพ้นรออัปโหลดแล้วจะไม่แนบ token
+
 External webhook ไม่มี distributed transaction กับ DB จึงรับประกัน exactly-once ไม่ได้เมื่อ Discord รับข้อความแล้ว network ขาดก่อนบันทึก ID อาจเห็นข้อความซ้ำได้ กรณีปกติ retry ใช้ message ID ที่บันทึกแล้วและไม่มี worker ส่งซ้อนกัน ห้ามอ้าง exactly-once ภายนอก
 
 ## Performance budget

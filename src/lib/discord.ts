@@ -13,6 +13,7 @@ export function discordPayload(
     discord_user_id: string | null;
   },
   appUrl: string,
+  uploadUrl?: string,
 ) {
   const mention =
     l.discord_user_id && /^\d{15,22}$/.test(l.discord_user_id)
@@ -40,6 +41,15 @@ export function discordPayload(
           { name: "เหตุผล", value: l.reason.slice(0, 1024) || "—" },
           { name: "เลขที่ใบลา", value: l.document_number },
           { name: "สถานะ", value: statusLabels[l.status] },
+          ...(uploadUrl &&
+          ["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(l.status)
+            ? [
+                {
+                  name: "ลิงก์อัปโหลดหลักฐาน — ส่งต่อให้พนักงาน",
+                  value: `${uploadUrl}\nMentor คัดลอกลิงก์นี้ส่งให้พนักงานได้เลย ใช้อัปโหลดได้ครั้งเดียว`,
+                },
+              ]
+            : []),
         ],
         footer: { text: "ตรวจหลักฐานเท่านั้น ไม่ใช่การอนุมัติวันลาในระบบ HR" },
       },
