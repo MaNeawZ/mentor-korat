@@ -9,6 +9,54 @@ export type DiscordEvidenceRef = {
   discord_attachment_id: string;
 };
 const snowflake = /^[0-9]{15,22}$/;
+type Attachment = { id: string; filename?: string; url?: string };
+type DiscordMessage = {
+  id?: string;
+  channel_id?: string;
+  attachments?: Attachment[];
+  embeds?: { image?: { url?: string; proxy_url?: string } }[];
+};
+function attachmentUrl(raw: string, channelId: string, id?: string) {
+  const url = new URL(raw);
+  const parts = url.pathname.match(
+    /^\/attachments\/([0-9]{15,22})\/([0-9]{15,22})\/([^/]+)$/,
+  );
+  if (
+    url.protocol !== "https:" ||
+    !["cdn.discordapp.com", "media.discordapp.net"].includes(url.hostname) ||
+    url.port ||
+    url.username ||
+    url.password ||
+    !parts ||
+    parts[1] !== channelId ||
+    (id && parts[2] !== id)
+  )
+    throw new HttpError(503, "ที่อยู่ไฟล์หลักฐาน Discord ไม่ถูกต้อง");
+  return { url, id: parts[2], filename: decodeURIComponent(parts[3]) };
+}
+function messageAttachments(message: DiscordMessage): Attachment[] {
+  const candidates = Array.isArray(message.attachments)
+    ? message.attachments.filter((a) => snowflake.test(a.id))
+    : [];
+  // Discord excludes attachments referenced by an embed from attachments[].
+  for (const embed of message.embeds || []) {
+    for (const raw of [embed.image?.url, embed.image?.proxy_url]) {
+      if (!raw || !snowflake.test(message.channel_id || "")) continue;
+      try {
+        const found = attachmentUrl(raw, message.channel_id!);
+        if (!candidates.some((a) => a.id === found.id))
+          candidates.push({
+            id: found.id,
+            filename: found.filename,
+            url: found.url.toString(),
+          });
+      } catch {
+        /* Never follow external embeds or attachment:// placeholders. */
+      }
+    }
+  }
+  return candidates;
+}
 function webhook(
   ref?: Pick<DiscordEvidenceRef, "discord_webhook_id" | "discord_message_id">,
 ) {
@@ -93,12 +141,6 @@ export async function sendDiscordEvidence(
       content: `📎 หลักฐานใบลา ${documentNumber}`,
       allowed_mentions: { parse: [] },
       attachments: [{ id: 0, filename }],
-      embeds: [
-        {
-          title: `หลักฐานใบลา ${documentNumber}`,
-          image: { url: `attachment://${filename}` },
-        },
-      ],
     }),
   );
   form.append(
@@ -107,10 +149,13 @@ export async function sendDiscordEvidence(
     filename,
   );
   const r = await providerRequest(url, { method: "POST", body: form });
-  const message = await r.json();
-  const attachment = message.attachments?.find(
-    (a: { filename: string }) => a.filename === filename,
-  );
+  const message: DiscordMessage = await r.json();
+  const attachments = messageAttachments(message);
+  // Exactly one file is sent. A provider-normalized filename is acceptable
+  // only when there is one unambiguous attachment, never choose arbitrarily.
+  const attachment =
+    attachments.find((a) => a.filename === filename) ||
+    (attachments.length === 1 ? attachments[0] : undefined);
   if (
     !snowflake.test(message.id || "") ||
     !snowflake.test(attachment?.id || "")
@@ -121,8 +166,8 @@ export async function sendDiscordEvidence(
     );
   return {
     discord_webhook_id: webhookId,
-    discord_message_id: message.id,
-    discord_attachment_id: attachment.id,
+    discord_message_id: message.id!,
+    discord_attachment_id: attachment!.id,
   };
 }
 export async function deleteDiscordEvidence(
@@ -136,30 +181,22 @@ export async function readDiscordEvidence(ref: DiscordEvidenceRef) {
     throw new HttpError(503, "ข้อมูลอ้างอิงหลักฐานไม่ถูกต้อง");
   const { url } = webhook(ref);
   // Fetch the message each time: Discord attachment URLs expire.
-  const message = await (await providerRequest(url)).json();
-  const attachment = message.attachments?.find(
-    (a: { id: string }) => a.id === ref.discord_attachment_id,
+  const message: DiscordMessage = await (await providerRequest(url)).json();
+  const attachment = messageAttachments(message).find(
+    (a) => a.id === ref.discord_attachment_id,
   );
   if (!attachment) throw new HttpError(410, "ไม่พบไฟล์แนบในข้อความ Discord");
-  let attachmentUrl: URL;
+  let downloadUrl: URL;
   try {
-    attachmentUrl = new URL(attachment.url);
+    downloadUrl = attachmentUrl(
+      attachment.url || "",
+      message.channel_id || "",
+      ref.discord_attachment_id,
+    ).url;
   } catch {
-    throw new HttpError(503, "ข้อมูลไฟล์แนบ Discord ไม่ถูกต้อง");
-  }
-  if (
-    attachmentUrl.protocol !== "https:" ||
-    attachmentUrl.hostname !== "cdn.discordapp.com" ||
-    attachmentUrl.port ||
-    attachmentUrl.username ||
-    attachmentUrl.password ||
-    !snowflake.test(message.channel_id || "") ||
-    !attachmentUrl.pathname.startsWith(
-      `/attachments/${message.channel_id}/${ref.discord_attachment_id}/`,
-    )
-  )
     throw new HttpError(503, "ที่อยู่ไฟล์หลักฐาน Discord ไม่ถูกต้อง");
-  const response = await providerRequest(attachmentUrl);
+  }
+  const response = await providerRequest(downloadUrl);
   if (Number(response.headers.get("content-length")) > MAX_FILE_BYTES)
     throw new HttpError(413, "ไฟล์หลักฐานใหญ่เกินกำหนด");
   const data = await limitedBody(response, MAX_FILE_BYTES);

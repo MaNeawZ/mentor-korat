@@ -43,6 +43,8 @@
 
 ## 3. Discord
 
+อัปเดตแก้การอัปโหลดที่รูปเข้า Discord แต่เว็บแจ้งข้อมูลไฟล์ไม่ครบ: ส่งไฟล์แนบปกติ และอ่านข้อมูลอ้างอิงได้จากทั้ง attachments และรูปใน embeds ของข้อความเก่า รวมถึง URL ของ Discord media proxy ที่ตรวจ hostname/channel/attachment ID แล้ว ไม่ต้องรัน migration เพิ่ม หากเคยเกิด error ก่อนบันทึก DB รูปอาจอยู่ใน Discord แต่ยังไม่เชื่อมใบลา ต้องตรวจและผูก reference ของข้อความเดิมภายใต้ active token ก่อน ไม่ถือว่ารูปที่เห็นใน Discord ยืนยันว่าใบลาเปลี่ยนสถานะแล้ว
+
 สร้าง private channel จำกัดสมาชิกที่ได้รับอนุญาตให้อ่านเหตุผลการลาและรูปหลักฐาน สร้าง webhook ใน channel นั้น ใส่ `DISCORD_WEBHOOK_URL` ฝั่ง server แล้วใช้ปุ่มทดสอบใน `/settings/discord` การกดปุ่มทดสอบส่งข้อความทดสอบ ส่วนการอัปโหลดของพนักงานจะแนบรูปใหม่ไปในห้องนี้โดยตรงตามคำขอผู้ใช้
 
 เปิด Discord Developer Mode → Copy User ID ของ Mentor → ใส่ settings/users ตรวจว่า ID เป็นของคนที่รับผิดชอบจริง `allowed_mentions` จำกัดเฉพาะ ID นี้ อ่าน [Discord Webhook API](https://github.com/discord/discord-api-docs/blob/main/developers/resources/webhook.mdx)

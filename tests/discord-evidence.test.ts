@@ -33,7 +33,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
-it("posts a multipart file with an attachment preview and obtains durable IDs instead of saving a signed CDN URL", async () => {
+it("posts a normal file attachment and obtains durable IDs instead of saving a signed CDN URL", async () => {
   send.mockResolvedValue(Response.json(attachment()));
   expect(await sendDiscordEvidence(bytes, filename, "LE-256911001234")).toEqual(
     ref,
@@ -45,7 +45,93 @@ it("posts a multipart file with an attachment preview and obtains durable IDs in
   expect(form.get("files[0]")).toBeInstanceOf(File);
   const payload = JSON.parse(form.get("payload_json") as string);
   expect(payload.allowed_mentions).toEqual({ parse: [] });
-  expect(payload.embeds[0].image.url).toBe(`attachment://${filename}`);
+  expect(payload.attachments).toEqual([{ id: 0, filename }]);
+  expect(payload.embeds).toBeUndefined();
+});
+it("accepts successful uploads when Discord returns an embedded image instead of attachments[]", async () => {
+  const embedded = {
+    id: ref.discord_message_id,
+    channel_id: channel,
+    attachments: [],
+    embeds: [
+      {
+        image: {
+          url: `https://cdn.discordapp.com/attachments/${channel}/${ref.discord_attachment_id}/${filename}?ex=fresh`,
+        },
+      },
+    ],
+  };
+  send.mockResolvedValue(Response.json(embedded));
+  expect(await sendDiscordEvidence(bytes, filename, "LE-256911001234")).toEqual(
+    ref,
+  );
+  expect(send).toHaveBeenCalledOnce();
+});
+it("reads files already sent as embeds using their refreshed Discord media URL", async () => {
+  send
+    .mockResolvedValueOnce(
+      Response.json({
+        id: ref.discord_message_id,
+        channel_id: channel,
+        attachments: [],
+        embeds: [
+          {
+            image: {
+              url: `attachment://${filename}`,
+              proxy_url: `https://media.discordapp.net/attachments/${channel}/${ref.discord_attachment_id}/${filename}?ex=renewed`,
+            },
+          },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(new Response(bytes));
+  expect(await readDiscordEvidence(ref)).toEqual(bytes);
+  expect(String(send.mock.calls[1][0])).toContain(
+    "https://media.discordapp.net/attachments/",
+  );
+});
+it("accepts a renamed single attachment but refuses ambiguous renamed attachments", async () => {
+  send.mockResolvedValue(
+    Response.json({
+      ...attachment(),
+      attachments: [
+        { id: ref.discord_attachment_id, filename: "normalized.webp" },
+      ],
+    }),
+  );
+  expect(await sendDiscordEvidence(bytes, filename, "LE-256911001234")).toEqual(
+    ref,
+  );
+  send.mockResolvedValue(
+    Response.json({
+      ...attachment(),
+      attachments: [
+        { id: ref.discord_attachment_id, filename: "one.webp" },
+        { id: "567890123456789012", filename: "two.webp" },
+      ],
+    }),
+  );
+  await expect(
+    sendDiscordEvidence(bytes, filename, "LE-256911001234"),
+  ).rejects.toThrow("ข้อมูลไฟล์ไม่ครบ");
+});
+it("does not recover an embedded file from an external URL or a different channel", async () => {
+  for (const url of [
+    "https://evil.example/file.webp",
+    `https://cdn.discordapp.com/attachments/999999999999999999/${ref.discord_attachment_id}/${filename}`,
+  ]) {
+    send.mockResolvedValue(
+      Response.json({
+        id: ref.discord_message_id,
+        channel_id: channel,
+        attachments: [],
+        embeds: [{ image: { url } }],
+      }),
+    );
+    await expect(
+      sendDiscordEvidence(bytes, filename, "LE-256911001234"),
+    ).rejects.toThrow("ข้อมูลไฟล์ไม่ครบ");
+  }
 });
 it("fetches a fresh attachment URL from the stored message on every read and proxies bounded WebP bytes", async () => {
   send
