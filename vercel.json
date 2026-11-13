@@ -1,0 +1,4 @@
+{
+  "git": { "deploymentEnabled": false },
+  "crons": [{ "path": "/api/cron/process", "schedule": "* * * * *" }]
+}

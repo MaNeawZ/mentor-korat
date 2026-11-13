@@ -1,0 +1,93 @@
+# Setup และ deployment
+
+## 1. Supabase โดยไม่กระทบ public
+
+สำรองข้อมูลและทดลอง migration กับ **development Supabase project แยก** ก่อน production ห้าม `supabase db reset`, ห้าม test seed ใน project จริง
+
+1. เปิด Project Settings → Data API → Exposed schemas **เพิ่ม** `mentor_korat` โดยคง `public` และ schema อื่นเดิมทั้งหมด ห้าม replace รายการเดิม
+2. ใช้ SQL role ที่สร้าง schema ใหม่ได้ เก็บ connection string แบบ direct หรือ session pooler ใน `SUPABASE_MIGRATION_DATABASE_URL` ใช้ TLS ใน production
+3. รัน `node --env-file=.env.local scripts/migrate.mjs --check` ตรวจ reviewed checksum และข้อห้าม schema
+4. รัน `node --env-file=.env.local scripts/migrate.mjs` จะ lock migration, สร้างเฉพาะ mentor_korat, บันทึก version/checksum/applied_at, ข้ามไฟล์เดิม ถ้า checksum เปลี่ยนจะหยุด
+5. รัน `npm run setup:storage` สร้าง private bucket `mentor-korat-evidence` ผ่าน Storage API **ไม่แก้ storage tables** ไม่เปิด public policies และไม่สร้าง anon object grants
+6. ตั้งค่า Supabase Auth: ปิด public signup สำหรับ deployment นี้หากไม่กระทบระบบที่ใช้ project ร่วมกัน; หากระบบเดิมต้องใช้ signup ให้คงเดิม แอปนี้ตรวจ app_users เสมอ ผู้สมัครทั่วไปเข้าแอปไม่ได้
+7. ตั้ง Site URL และเพิ่ม redirect URL `https://your-domain/auth/callback` โดยคง redirect ของระบบอื่นไว้ เปิด email provider และ SMTP สำหรับ recovery ทดสอบส่ง recovery จริง
+8. ใช้ recovery email template ที่มี `{{ .ConfirmationURL }}` เพื่อ PKCE exchange ผู้ใช้เปิดลิงก์บน browser ที่ขอ recovery ถ้าเปลี่ยนอุปกรณ์ให้ขอลิงก์ใหม่
+9. สร้าง Auth user ของหัวหน้าศูนย์แรกใน Supabase Dashboard, ตั้ง BOOTSTRAP_USER_ID/NAME แล้ว `npm run bootstrap` ใช้ได้เมื่อ app_users ยังว่างเท่านั้น นำค่าทั้งสองออกหลังใช้
+10. Login → เพิ่มแผนก → เพิ่ม employee → สร้าง Auth user ของ Mentor/HR/หัวหน้าศูนย์คนที่สอง → หน้า settings/users ผูก UUID → ตั้ง Discord ID → assign employees
+
+ไม่เพิ่ม Auth trigger, ไม่แก้ `public`, ไม่เปลี่ยน shared storage/realtime configuration โดยอัตโนมัติ หากนโยบาย storage ของระบบเดิมอนุญาตอ่านทุก bucket ต้องแก้ขอบเขตนโยบายโดยเจ้าของ project ก่อนใช้ข้อมูลจริง เนื่องจากระบบนี้ไม่แก้ policies ของระบบอื่น
+
+### ทางเลือกเมื่อไม่ทราบรหัสผ่านฐานข้อมูล: SQL Editor
+
+สำหรับการติดตั้งด้วยมือ สามารถใช้ Supabase Dashboard SQL Editor โดยไม่ reset รหัสผ่านและไม่ใช้ SUPABASE_MIGRATION_DATABASE_URL:
+
+1. รัน `npm.cmd run migrations:export` จะสร้าง `supabase/setup-sql-editor.sql` จาก migrations ที่ผ่าน checksum check โดยไม่เชื่อมต่อฐานข้อมูล
+2. เปิดไฟล์แล้วคัดลอก **เนื้อหาทั้งหมด** ไปวางใน SQL Editor → New query ของ project ที่ต้องการ แล้ว Run ทั้งไฟล์ อย่าเลือกเฉพาะบางบรรทัด
+3. SQL ใช้ transaction, advisory lock และ schema_migrations เหมือน CLI รันซ้ำหลังสำเร็จได้ และจะหยุดเมื่อ checksum ของ version เดิมไม่ตรง ไม่มีการแก้ schema public
+4. เพิ่ม mentor_korat ใน API Exposed schemas โดยคง public และค่าเดิมทั้งหมด
+5. รัน `npm.cmd run bootstrap` เพื่อเพิ่มหัวหน้าศูนย์จาก Auth user ที่เตรียมไว้ แล้ว login
+
+วิธีนี้ใช้สิทธิ์บัญชี Dashboard ที่คุณมี ไม่ต้องทราบรหัสผ่านฐานข้อมูล ส่วน CI/CD migration อัตโนมัติในอนาคตยังต้องมี connection credentials ที่ใช้ได้ หรือวางขั้นตอน migration ด้วยมือก่อน deploy
+
+## 2. LINE
+
+1. สร้าง Messaging API channel ของ LINE Official Account นำ channel secret/access token ใส่ server environment
+2. เปิดอนุญาต bot เข้ากลุ่ม และตั้ง webhook URL `https://your-domain/api/webhooks/line` กด Verify (รองรับ events ว่าง)
+3. เปิด Use webhook และ webhook redelivery ถ้ามี ปิด auto-response ที่รบกวนตามการตั้งค่าบัญชีของคุณ
+4. เชิญ bot เข้ากลุ่ม ส่งข้อความหนึ่งครั้ง event ที่มี signature ถูกต้องทำให้ group ID แสดงใน `/settings/line` เป็น **รอยืนยัน / ปิดใช้งาน** ไม่เก็บข้อความจากกลุ่มนี้
+5. ผู้ดูแลตรวจสอบ Group ID `C...` ของกลุ่มที่เชิญแล้วแก้ชื่อ/เปิดใช้งาน ถ้าทราบ ID อยู่แล้วเพิ่มผ่าน UI ได้
+6. หลังเปิดแล้ว ส่งข้อความแจ้งลาทดสอบ **ด้วย employee ใน staging เท่านั้น** ตรวจ queue, parsing issues, leave และ Discord
+7. Bot ไม่ reply ข้อความอัตโนมัติ Mentor ส่ง upload link ให้ employee เอง Group membership/admin setup ต้องทำใน LINE app/console
+
+อ่านมาตรฐาน signature และ redelivery: [LINE signature verification](https://developers.line.biz/en/docs/messaging-api/verify-webhook-signature/), [receiving messages](https://developers.line.biz/en/docs/messaging-api/receiving-messages/)
+
+## 3. Discord
+
+สร้าง private channel จำกัดสมาชิกที่ได้รับอนุญาตให้อ่านเหตุผลการลา สร้าง webhook ใน channel นั้น ใส่ `DISCORD_WEBHOOK_URL` ฝั่ง server แล้วใช้ปุ่มทดสอบใน `/settings/discord` การกดปุ่มนี้ส่งข้อความจริงตามที่ผู้ดูแลสั่ง ไม่มีการส่งรูปหลักฐานอัตโนมัติ
+
+เปิด Discord Developer Mode → Copy User ID ของ Mentor → ใส่ settings/users ตรวจว่า ID เป็นของคนที่รับผิดชอบจริง `allowed_mentions` จำกัดเฉพาะ ID นี้ อ่าน [Discord Webhook API](https://github.com/discord/discord-api-docs/blob/main/developers/resources/webhook.mdx)
+
+Optional DM: สร้าง bot และนำเข้า server โดยเจ้าของ server เก็บ DISCORD_BOT_TOKEN/GUILD_ID ใน environment ผู้รับต้องอนุญาต DM ถ้าส่งไม่ได้ ระบบแจ้งเว็บให้คัดลอกลิงก์ ไม่ทำให้ workflow หยุด
+
+ค่า `discord_mode` ใน settings: `"edit"` อัปเดตข้อความเดิม, `"events"` ส่งข้อความใหม่ (ค่าเป็น JSON string)
+
+## 4. Vercel
+
+1. สร้าง project framework Next.js, Node 24, region ใกล้ Supabase ใส่ runtime env ตาม .env.example
+2. ตั้ง NEXT_PUBLIC_APP_URL เป็น production origin จริงก่อน build ตั้ง UPLOAD_TOKEN_SECRET/CRON_SECRET แบบถาวรและมีความยาวอย่างน้อย 32 ตัวอักษร
+3. Vercel cron ทุกนาทีใน vercel.json ต้องใช้แผนที่รองรับ หากใช้ external scheduler ให้เรียก GET `/api/cron/process` ด้วย `Authorization: Bearer <CRON_SECRET>` ทุกนาที ห้ามส่ง secret ใน query string
+4. Function maxDuration=300 วินาทีต้องอยู่ใน plan ที่รองรับ batch ส่ง Discord สูงสุด 5 งาน/รอบ
+5. Vercel มี request body limit: frontend บีบอัดภาพก่อนส่ง หากไฟล์หลังบีบอัดยังใหญ่เกิน provider limit ให้เลือกภาพขนาดเล็กลง หรือโฮสต์ Next.js บน runtime ที่รองรับ 8 MB ระบบ server จำกัดไฟล์ต้นฉบับ 8 MB และรูป 24MP
+6. ปิด Git auto-deploy เพื่อให้ GitHub Actions เป็นผู้ควบคุม migration ก่อน deploy มี `git.deploymentEnabled=false` ใน config ตรวจ setting ใน project ด้วย
+7. Preview ต้องใช้ development Supabase/environment ที่แยกกันและ NEXT_PUBLIC_APP_URL ของ preview ห้าม preview ชี้ production หรือใช้ production migration connection
+8. ถ้าเปิด Deployment Protection ให้ใส่ VERCEL_AUTOMATION_BYPASS_SECRET ใน GitHub เพื่อ health check
+
+## 5. GitHub Actions
+
+Repository ปัจจุบันเริ่มที่ main ให้สร้าง `dev` และ `prd` จาก source ที่ตรวจแล้วเมื่อพร้อม push ไม่เปลี่ยน remote branch ให้อัตโนมัติ
+
+ตั้ง production environment secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, SUPABASE_MIGRATION_DATABASE_URL และ optional VERCEL_AUTOMATION_BYPASS_SECRET ตัวแปร Supabase/LINE/Discord runtime ตั้งใน Vercel production environment ให้ครบ
+
+ตั้ง Branch Protection dev/prd: require PR, review, CI `validate`, block force push/deletion กำหนด CODEOWNERS ให้ migration/security/workflows ต้อง review ตรวจ SQL และ checksum manifest คู่กัน ไม่แก้ applied migration ให้เพิ่มไฟล์ version ใหม่และปรับ manifest หลัง review
+
+`ci.yml` ไม่ใช้ production secrets: lint → typecheck → unit + PostgreSQL/RLS integration → migration check → build → production dependency audit
+
+CI ยังติดตั้ง Chromium เพื่อรัน browser tests กับ production build และแนบ test-results เป็น artifact สำหรับ review หากต้องการ preview ให้ใช้ Vercel project/environment ที่แยกจาก production: `npx vercel pull --environment=preview` → `npx vercel build` → `npx vercel deploy --prebuilt` ต้องตั้งค่าฐานข้อมูล development และ preview origin ก่อน build ไม่มีขั้นตอน migrate production จาก preview
+
+`deploy-prd.yml` push prd: checks → additive migration → pull env → production build → deploy → health check → job summary ใช้ concurrency group ป้องกัน deploy ซ้อน ถ้า migration fail จะไม่ build/deploy ไม่เปิดเผย credentials ใน output
+
+## 6. Migration safety และ rollback
+
+Migration runner ใช้ advisory transaction lock, version/checksum history, atomic transaction รวมทุก pending file และไม่ใช้ reset SQL ที่อยู่ใน manifest ผ่านการตรวจ scope แล้ว; regex เป็น guard เสริม **ไม่ใช่ SQL sandbox** ห้ามนำ SQL ที่ไม่เชื่อถือมาเพิ่ม manifest โดยไม่ review
+
+ถ้า build/deploy หลัง migration ล้มเหลว schema ที่เพิ่มจะยังอยู่ ใช้ forward-compatible migrations ให้ version เก่าทำงานต่อได้ เลือก deployment ก่อนหน้าใน Vercel แล้ว Promote/Rollback ตรวจ `/api/health` และ smoke workflow ไม่ทำ down migration อัตโนมัติ ถ้าต้องแก้ DB ให้ออก forward migration หลัง review และ backup
+
+## 7. Operations
+
+ตรวจ `/api/health`, queue depth/FAILED และจำนวน parsing issues เป็นประจำ ตรวจ scheduler ทำงาน ไม่ปล่อยงาน PROCESSING ค้างเกิน lease (5 นาที) FAILED ลองใหม่ได้ด้วย `POST /api/queues/retry` หรือปุ่มในหน้าการเชื่อมต่อ พร้อมยืนยันและ audit
+
+ปิด request URL/body logging และ analytics สำหรับ `/upload/*` และ `/api/upload/*` ที่ reverse proxy/APM/CDN เนื่องจาก URL มี bearer token ห้าม paste token ใน ticket/log หรือแชร์ช่องกลาง หน้า upload ไม่ใส่ tracker และตั้ง no-referrer
+
+ทบทวน retention_days กับฝ่ายบุคคล กำหนด backup และผู้เข้าถึง เหตุผลทางสุขภาพและหลักฐานไม่ควรเก็บเกินนโยบาย ไม่มี scheduled deletion ที่อาจลบหลักฐานโดยไม่ทบทวน การ reconcile orphan storage ต้องเทียบ metadata และอายุ >24h ก่อนเจ้าของระบบอนุมัติลบผ่าน Storage API
+
+ก่อน production ทำ acceptance ใน [ACCEPTANCE.md](ACCEPTANCE.md) ให้ครบ โดยเฉพาะ Supabase API grants, storage policy ของ project ร่วม, recovery email, LINE redelivery และ actual Discord retry

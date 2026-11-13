@@ -1,0 +1,64 @@
+name: Deploy Production
+on:
+  push:
+    branches: [prd]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: korat-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/prd'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 25
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run migrations:check
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Apply additive migrations
+        run: npm run migrations:apply
+        env:
+          SUPABASE_MIGRATION_DATABASE_URL: ${{ secrets.SUPABASE_MIGRATION_DATABASE_URL }}
+      - name: Pull production configuration
+        run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Build production artifact
+        run: npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy production
+        id: deploy
+        shell: bash
+        run: |
+          DEPLOYMENT_URL=$(npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Health check
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          HEALTH_CHECK_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: curl --fail --retry 5 --retry-delay 5 --retry-all-errors -H "x-vercel-protection-bypass:$HEALTH_CHECK_BYPASS" "$DEPLOYMENT_URL/api/health"
+      - name: Report result
+        if: always()
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOY_STATUS: ${{ job.status }}
+        run: |
+          echo "Production deployment: $DEPLOY_STATUS" >> "$GITHUB_STEP_SUMMARY"
+          echo "$DEPLOYMENT_URL" >> "$GITHUB_STEP_SUMMARY"
