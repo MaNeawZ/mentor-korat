@@ -78,7 +78,7 @@ CI ยังติดตั้ง Chromium เพื่อรัน browser test
 
 ### External scheduler (ไม่ใช้ Vercel Cron)
 
-ข้อความ LINE จะปลุก worker ทันทีผ่าน Next.js after() หลังบันทึกคิวและส่ง HTTP response แล้ว การอัปโหลดหลักฐาน การตรวจใบลา และเปลี่ยน assignment ก็ปลุก worker หลัง commit เช่นกัน ต้องใช้ deployment ที่รองรับ after()/waitUntil และ maxDuration ที่ตั้งไว้
+ข้อความ LINE จะบันทึกคิวก่อน แล้วพยายามสร้างใบลา/แจ้งเตือนเว็บจากข้อความที่เพิ่งรับภายในเวลาที่เหลือจาก budget 1.5 วินาทีนับตั้งแต่เข้า handler (สูงสุด 5 events) ก่อนตอบ HTTP จากนั้นส่ง Discord และทำงานที่เหลือต่อผ่าน Next.js after() การอัปโหลดหลักฐาน การตรวจใบลา และเปลี่ยน assignment ก็ปลุก worker หลัง commit เช่นกัน ต้องใช้ deployment ที่รองรับ after()/waitUntil และ maxDuration ที่ตั้งไว้ หาก DB ช้าหรือ Discord ขัดข้อง งานยังอยู่ในคิวสำหรับ retry [LINE ระบุ timeout เมื่อไม่ตอบภายใน 2 วินาที](https://developers.line.biz/en/docs/messaging-api/check-webhook-error-statistics/) จึงต้องวัดเวลาจริงรวม cold start/การอ่าน body/การเก็บ event; budget เป็นการจำกัด fast path ไม่ใช่การรับประกัน end-to-end latency
 
 เตรียม `.github/workflows/process-worker.yml` เรียก worker ทุก 5 นาทีผ่าน GitHub Actions เป็น fallback สำหรับ retry/งานค้าง มี concurrency control และกด Run workflow เองได้ ไม่ใช้ database password และไม่รัน migration อัตโนมัติ
 
@@ -118,7 +118,7 @@ Migration runner ใช้ advisory transaction lock, version/checksum history, 
 
 ตรวจ `/api/health`, queue depth/FAILED และจำนวน parsing issues เป็นประจำ ตรวจ external scheduler ทำงานตามรอบที่เลือก งาน PROCESSING หมด lease หลัง 5 นาทีจึงพร้อมให้ worker รอบถัดไป claim ใหม่ FAILED ลองใหม่ได้ด้วย `POST /api/queues/retry` หรือปุ่มในหน้าการเชื่อมต่อ พร้อมยืนยันและ audit
 
-Health response ของเวอร์ชันล่าสุดมี `build` (commit สั้น ถ้า Vercel ให้ค่า metadata) และ `workerMode: "after-response"` สำหรับแยกเว็บเวอร์ชันเก่าที่ยังไม่ปลุก worker หากตอบเพียง `status` อย่าเพิ่งสรุปว่า immediate worker ถูก deploy แล้ว และอย่าใช้ผล run จาก event `push`/`workflow_dispatch` แทนหลักฐานว่า event `schedule` ทำงาน ตรวจชนิด event ของ run จริงใน GitHub ด้วย
+Health response ของเวอร์ชันล่าสุดมี `build` (commit สั้น ถ้า Vercel ให้ค่า metadata) และ `workerMode: "inline-line-after-discord"` สำหรับยืนยันว่าเว็บใช้เส้นทางสร้างใบลา/แจ้งเตือนเว็บใน webhook แล้วส่ง Discord ต่อหลัง response หากตอบเพียง `status` หรือเป็นโหมดเก่า อย่าเพิ่งสรุปว่าเวอร์ชันใหม่นี้ถูก deploy แล้ว และอย่าใช้ผล run จาก event `push`/`workflow_dispatch` แทนหลักฐานว่า event `schedule` ทำงาน ตรวจชนิด event ของ run จริงใน GitHub ด้วย
 
 ปิด request URL/body logging และ analytics สำหรับ `/upload/*` และ `/api/upload/*` ที่ reverse proxy/APM/CDN เนื่องจาก URL มี bearer token ห้าม paste token ใน ticket/log หรือแชร์ช่องกลาง หน้า upload ไม่ใส่ tracker และตั้ง no-referrer
 

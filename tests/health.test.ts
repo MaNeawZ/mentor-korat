@@ -26,7 +26,7 @@ it("identifies the deployed immediate-worker build without exposing secrets", as
   expect(body).toEqual({
     status: "ok",
     build: "abc1234",
-    workerMode: "after-response",
+    workerMode: "inline-line-after-discord",
   });
   expect(JSON.stringify(body)).not.toContain("server-test-key");
   expect(response.headers.get("cache-control")).toBe("no-store");

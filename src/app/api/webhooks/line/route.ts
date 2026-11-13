@@ -5,6 +5,7 @@ import { adminClient } from "@/lib/supabase/server";
 import { check, errorResponse, HttpError } from "@/lib/api";
 import { limitedBody } from "@/lib/body";
 import { wakeWorker } from "@/lib/worker-wakeup";
+import { ingestIncomingLineJobs } from "@/lib/line/ingest";
 export const maxDuration = 300;
 const eventSchema = z
   .object({
@@ -21,6 +22,7 @@ const eventSchema = z
   })
   .passthrough();
 export async function POST(request: Request) {
+  const receivedAt = Date.now();
   try {
     if (!process.env.LINE_CHANNEL_SECRET)
       throw new HttpError(503, "Integration not configured");
@@ -76,6 +78,13 @@ export async function POST(request: Request) {
           .upsert(rows, { onConflict: "id", ignoreDuplicates: true }),
       );
       wakeWorker();
+      // Keep inline work within the webhook's response budget, including time
+      // already spent persisting events. Discord always runs after the response.
+      await ingestIncomingLineJobs(
+        db,
+        rows,
+        Math.max(0, 1500 - (Date.now() - receivedAt)),
+      );
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

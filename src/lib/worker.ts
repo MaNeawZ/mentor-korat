@@ -1,8 +1,8 @@
 import "server-only";
 import { adminClient } from "./supabase/server";
 import { check } from "./api";
-import { parseLeave } from "./line/parser";
-import { newToken, deriveToken } from "./security";
+import { deriveToken } from "./security";
+import { loadLeaveTypes, ingestLineJob } from "./line/ingest";
 import { discordPayload } from "./discord";
 import { statuses, type Status } from "./domain";
 class DeliveryError extends Error {
@@ -40,45 +40,13 @@ async function discordRequest(
 }
 export async function runWorker() {
   const db = adminClient();
+  const types = await loadLeaveTypes(db);
   const line = await db.rpc("claim_jobs", { queue: "line" });
   check(line);
-  const types = await db
-    .from("app_settings")
-    .select("value")
-    .eq("key", "leave_types")
-    .single();
-  check(types);
   let processed = 0;
   for (const job of line.data || []) {
     try {
-      const parsed = parseLeave(job.payload.message.text, types.data!.value);
-      if (!parsed) {
-        check(
-          await db
-            .from("integration_events")
-            .update({
-              status: "DONE",
-              payload: {
-                ...job.payload,
-                message: {
-                  ...job.payload.message,
-                  text: "[non-leave message discarded]",
-                },
-              },
-            })
-            .eq("id", job.id),
-        );
-        continue;
-      }
-      const t = newToken(process.env.UPLOAD_TOKEN_SECRET || "");
-      check(
-        await db.rpc("ingest_leave", {
-          event_id: job.id,
-          parsed,
-          hash: t.hash,
-          token_nonce: t.nonce,
-        }),
-      );
+      await ingestLineJob(db, job, types);
       processed++;
     } catch {
       check(
@@ -92,7 +60,8 @@ export async function runWorker() {
             locked_until: null,
             error_code: "PROCESSING_FAILED",
           })
-          .eq("id", job.id),
+          .eq("id", job.id)
+          .neq("status", "DONE"),
       );
     }
   }

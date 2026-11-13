@@ -54,7 +54,7 @@ export function NotificationBell() {
     const initial = setTimeout(() => void poll(), 0);
     const id = setInterval(() => {
       void poll();
-    }, 15000);
+    }, 5000);
     document.addEventListener("visibilitychange", poll);
     return () => {
       clearInterval(id);

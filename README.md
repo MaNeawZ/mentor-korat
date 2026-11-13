@@ -54,7 +54,7 @@ npm.cmd run dev
 - `/leaves/[id]`: ข้อมูลต้นฉบับ หลักฐานทุกเวอร์ชัน ลิงก์อัปโหลด การแก้ไข ประวัติ และการตรวจ
 - `/mentor/tasks`, `/reviews`: งานของตนและงานรอตรวจขั้นสุดท้าย
 - `/employees`, `/mentors`, `/assignments/unassigned`: ข้อมูลทีม เพิ่มแผนก และมอบหมายหลายคนพร้อมกันในหน้าที่เลือก
-- `/notifications`: อ่านรายการของตน / อ่านทั้งหมด และกระดิ่ง (poll ทุก 15 วินาทีเมื่อแท็บเปิดอยู่; refresh ข้อมูลเมื่อมีแจ้งเตือนเปลี่ยน และมี fallback ทุก 60 วินาที)
+- `/notifications`: อ่านรายการของตน / อ่านทั้งหมด และกระดิ่ง (poll ทุก 5 วินาทีเมื่อแท็บเปิดอยู่; refresh ข้อมูลเมื่อมีแจ้งเตือนเปลี่ยน และมี fallback ทุก 60 วินาที)
 - `/settings`, `/settings/users`, `/settings/permissions`, `/settings/line`, `/settings/discord`: การตั้งค่า บัญชี สิทธิ์ กลุ่มที่อนุญาต และสถานะคิว
 - `/audit-logs`: ประวัติผู้ดำเนินการและข้อมูลก่อน/หลัง
 - `/upload/[token]`: ไม่ต้อง login เลือกรูป/ถ่ายรูป Preview บีบอัด และส่งหลักฐาน
@@ -116,4 +116,4 @@ npm.cmd audit --omit=dev
 
 ## External scheduler
 
-ไม่มี cron ใน Vercel config แล้ว ข้อความ LINE ที่บันทึกเข้าคิวจะปลุก worker ผ่าน Next.js after() หลังส่ง HTTP response เพื่อเริ่มประมวลผลทันที ใช้ GitHub schedule เป็น fallback สำหรับ retry/งานค้าง: หลัง deploy ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) รอบ fallback ทุก 5 นาทีเปิดเป็นค่าเริ่มต้น ไม่ต้องกด Re-run; push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบทันที ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=false` เมื่อต้องการหยุดอัตโนมัติ GitHub schedule อาจล่าช้าได้ หากต้องการ retry ถี่ทุก 1 นาที ใช้ scheduler ภายนอกเรียก endpoint เดิมพร้อม Authorization header แทน รายละเอียดและ Deployment Protection อยู่ใน DEPLOYMENT.md
+ไม่มี cron ใน Vercel config แล้ว เมื่อรับข้อความ LINE จะบันทึก event อย่างทนทาน จากนั้นอ่านข้อมูลและเรียก transaction สร้างใบลา/แจ้งเตือนเว็บ/Discord outbox ก่อนตอบ LINE (fast path ไม่เกิน 5 events และมี budget 1.5 วินาที ไม่ใช่ latency ที่รับประกัน) Discord ส่งต่อทันทีหลัง response ผ่าน Next.js after() งานที่ช้าหรือขัดข้องยังอยู่ในคิวและมี GitHub schedule เป็น fallback: ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) รอบ fallback ทุก 5 นาทีเปิดเป็นค่าเริ่มต้น ไม่ต้องกด Re-run; push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบ ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=false` เมื่อต้องการหยุด fallback GitHub schedule อาจล่าช้าได้ รายละเอียดอยู่ใน DEPLOYMENT.md

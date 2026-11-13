@@ -26,7 +26,7 @@ it("bounds background work so a busy queue remains recoverable by the external s
   mocks.run.mockResolvedValue({ processed: 15 });
   wakeWorker();
   await background();
-  expect(mocks.run).toHaveBeenCalledTimes(5);
+  expect(mocks.run).toHaveBeenCalledTimes(20);
 });
 it("stops claiming more batches after the time budget", async () => {
   vi.spyOn(Date, "now")

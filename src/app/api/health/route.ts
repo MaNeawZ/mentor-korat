@@ -19,7 +19,7 @@ export async function GET() {
       {
         status: error ? "unhealthy" : "ok",
         build: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || null,
-        workerMode: "after-response",
+        workerMode: "inline-line-after-discord",
       },
       { status: error ? 503 : 200, headers: { "Cache-Control": "no-store" } },
     );

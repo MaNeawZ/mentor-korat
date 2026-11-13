@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   session: vi.fn(),
   wake: vi.fn(),
+  ingest: vi.fn(),
 }));
+vi.mock("@/lib/line/ingest", () => ({ ingestIncomingLineJobs: mocks.ingest }));
 vi.mock("@/lib/worker-wakeup", () => ({ wakeWorker: mocks.wake }));
 vi.mock("@/lib/supabase/server", () => ({
   adminClient: () => ({ from: mocks.from, rpc: mocks.rpc }),
@@ -48,6 +50,8 @@ beforeEach(() => {
   mocks.from.mockReset();
   mocks.rpc.mockReset();
   mocks.wake.mockReset();
+  mocks.ingest.mockReset();
+  mocks.ingest.mockResolvedValue(undefined);
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("HTTP trust boundaries", () => {
@@ -56,6 +60,7 @@ describe("HTTP trust boundaries", () => {
     expect(r.status).toBe(401);
     expect(mocks.from).not.toHaveBeenCalled();
     expect(mocks.wake).not.toHaveBeenCalled();
+    expect(mocks.ingest).not.toHaveBeenCalled();
   });
   it("accepts LINE verify requests with no events", async () => {
     mocks.from.mockReturnValue({
@@ -97,6 +102,14 @@ describe("HTTP trust boundaries", () => {
       ignoreDuplicates: true,
     });
     expect(mocks.wake).toHaveBeenCalledOnce();
+    expect(mocks.ingest).toHaveBeenCalledWith(
+      expect.anything(),
+      [{ id: "evt-1", payload: event }],
+      expect.any(Number),
+    );
+    expect(insert.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.ingest.mock.invocationCallOrder[0],
+    );
   });
   it("does not report success or wake a worker when durable enqueue fails", async () => {
     mocks.from.mockImplementation((table) =>
@@ -115,6 +128,33 @@ describe("HTTP trust boundaries", () => {
     );
     expect((await webhook(lineRequest([event]))).status).toBe(503);
     expect(mocks.wake).not.toHaveBeenCalled();
+  });
+  it("waits for immediate ingestion to finish before acknowledging an accepted leave", async () => {
+    mocks.from.mockImplementation((table) =>
+      table === "line_groups"
+        ? {
+            upsert: async () => ({ error: null }),
+            select: () => ({
+              eq: async () => ({ data: [{ id: group }], error: null }),
+            }),
+          }
+        : { upsert: async () => ({ error: null }) },
+    );
+    let release!: () => void;
+    mocks.ingest.mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    let acknowledged = false;
+    const response = webhook(lineRequest([event])).then((value) => {
+      acknowledged = true;
+      return value;
+    });
+    await vi.waitFor(() => expect(mocks.ingest).toHaveBeenCalledOnce());
+    expect(acknowledged).toBe(false);
+    release();
+    expect((await response).status).toBe(200);
   });
   it("blocks anonymous evidence and review access", async () => {
     const id = "11111111-1111-4111-8111-111111111111";
