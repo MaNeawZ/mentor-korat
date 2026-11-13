@@ -5,6 +5,7 @@ import { deriveToken } from "./security";
 import { loadLeaveTypes, ingestLineJob } from "./line/ingest";
 import { discordPayload } from "./discord";
 import { statuses, type Status } from "./domain";
+import { processEvidenceCleanup } from "./storage-cleanup";
 class DeliveryError extends Error {
   constructor(
     public code: string,
@@ -40,10 +41,11 @@ async function discordRequest(
 }
 export async function runWorker() {
   const db = adminClient();
+  const storageProcessed = await processEvidenceCleanup(db);
   const types = await loadLeaveTypes(db);
   const line = await db.rpc("claim_jobs", { queue: "line" });
   check(line);
-  let processed = 0;
+  let processed = storageProcessed;
   for (const job of line.data || []) {
     try {
       await ingestLineJob(db, job, types);

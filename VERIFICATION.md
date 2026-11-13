@@ -40,6 +40,8 @@ Browser preview / Computer Use ในแอปเปิดไม่ได้จ�
 
 ## สิ่งที่ยังไม่ได้ทดสอบ / ไม่ได้ดำเนินการ
 
+ฟีเจอร์ล้างรายการทดสอบจากหน้าตั้งค่า: ผ่าน lint, typecheck, production build, migration safety (4 migrations) และ unit/integration tests 107 ข้อใน 13 ไฟล์ ทดสอบใหม่ครอบคลุม role/permission/active/Origin, คำยืนยันและเหตุผล, snapshot เปลี่ยน, worker ยังถือ lease, การลบครบขอบเขตพร้อมเก็บ master data/public/Auth/audit, คิว exact evidence paths, event redelivery tombstones, Storage failure/backoff และ manual retry การทดสอบใช้ PGlite และ mocked Storage/HTTP เท่านั้น ไม่ได้เรียก clear-data บนข้อมูลจริง ไม่ได้ติดตั้ง migration ใหม่นี้บน Supabase จริง และยังไม่ได้ตรวจหน้าตั้งค่าใหม่ผ่าน browser ที่ login บน production
+
 การแก้ไข external scheduler: ถอด `crons` จาก vercel.json, เพิ่ม GitHub workflow ทุก 5 นาที เปิดเป็นค่าเริ่มต้นและเรียกรอบแรกเมื่อ push เปลี่ยน workflow/caller บน main (ตั้ง repository variable=false เพื่อหยุดได้) เพิ่ม caller script ที่ส่ง bearer header โดยไม่ตาม redirect ทดสอบ 13 กรณีสำหรับ caller/config/auth/error handling ด้วย mocked HTTP แล้ว รวมทั้ง lint/typecheck/production build ผ่าน ตรวจ YAML และเงื่อนไข unset/true/false/manual override แล้ว ทดสอบเพิ่มเติมการ export SQL Editor 2 กรณีรันบน PGlite และรวมอยู่ในยอด tests ข้างต้น
 
 การลดความหน่วง: webhook ที่บันทึก event สำเร็จปลุก worker ผ่าน Next.js after() หลัง response, drain สูงสุด 5 batches และใช้ scheduler กู้คืนงานค้าง การอัปโหลด/ตรวจ/มอบหมาย/retry ก็ปลุก worker หลัง commit ทดสอบ defer-until-after-response, burst draining, batch/time bounds, sanitized failure, enqueue failure ไม่ปลุก worker และ SQL ingestion ของพนักงานสองคน/ชื่อไม่ตรง/เลขใบลาซ้ำแล้ว กระดิ่ง polling 15 วินาทีพร้อม dedup และ fallback refresh 60 วินาที ยังไม่ได้วัด latency ของการแก้ไขนี้บน production หลัง deploy

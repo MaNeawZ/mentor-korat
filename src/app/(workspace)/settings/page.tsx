@@ -4,8 +4,10 @@ import { check } from "@/lib/api";
 import { PageHeader } from "@/components/page-header";
 import { EntityForm } from "@/components/entity-form";
 import { SettingsTabs } from "@/components/settings-tabs";
+import { ClearDataPanel } from "@/components/clear-data-panel";
+import { can } from "@/lib/domain";
 export default async function Settings() {
-  await requireUser("settings.manage");
+  const user = await requireUser("settings.manage");
   const db = await sessionClient();
   const r = await db.from("app_settings").select("key,value");
   check(r);
@@ -52,6 +54,9 @@ export default async function Settings() {
           </div>
         ))}
       </section>
+      {user.role === "CENTER_HEAD" && (
+        <ClearDataPanel enabled={can(user, "data.clear")} />
+      )}
     </>
   );
 }

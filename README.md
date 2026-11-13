@@ -114,6 +114,14 @@ npm.cmd audit --omit=dev
 
 ดู [DEPLOYMENT.md](DEPLOYMENT.md), [ARCHITECTURE.md](ARCHITECTURE.md), [SECURITY.md](SECURITY.md), [VERIFICATION.md](VERIFICATION.md) และ [ACCEPTANCE.md](ACCEPTANCE.md) ก่อนใช้งานจริง
 
+## ล้างรายการทดสอบจากหน้าตั้งค่า
+
+หัวหน้าศูนย์ที่มีสิทธิ์ `data.clear` เปิด **ตั้งค่าระบบ → ล้างข้อมูลใบลา → ตรวจสอบข้อมูลก่อนล้าง** ระบบแสดงจำนวนข้อมูลทั้งหมด ต้องระบุเหตุผล ยอมรับขอบเขต และพิมพ์ `ล้างข้อมูลใบลา` ก่อนยืนยัน ไม่มีแท็กแยกรายการทดสอบ จึงลบใบลาทั้งหมดพร้อมหลักฐาน ลิงก์อัปโหลด ประวัติตรวจใบลา ข้อความ LINE คิว และแจ้งเตือนในเว็บ หากข้อมูลเปลี่ยนหรือ worker กำลังทำงาน ระบบให้ตรวจสอบใหม่
+
+เก็บพนักงาน แผนก Mentor บัญชี/สิทธิ์ การตั้งค่า กลุ่ม LINE และ audit ไว้ ไม่แตะ `public` หรือ Supabase Auth ข้อความ Discord ที่ส่งไปแล้วไม่ถูกลบ รหัส event LINE ขั้นต่ำถูกเก็บเพื่อกัน redelivery สร้างรายการเดิมกลับมา ไฟล์หลักฐานลบผ่านคิวเฉพาะ path ที่บันทึกไว้ใน bucket `mentor-korat-evidence` มีสถานะค้างและปุ่มลองใหม่เมื่อครบจำนวน retry
+
+ก่อนใช้งานครั้งแรก ติดตั้ง migration `202611140001_clear_leave_data.sql` ตาม [DEPLOYMENT.md](DEPLOYMENT.md) การติดตั้งเพิ่มฟังก์ชันเท่านั้น ยังไม่ล้างข้อมูลจนกดปุ่มยืนยัน
+
 ## External scheduler
 
 ไม่มี cron ใน Vercel config แล้ว เมื่อรับข้อความ LINE จะบันทึก event อย่างทนทาน จากนั้นอ่านข้อมูลและเรียก transaction สร้างใบลา/แจ้งเตือนเว็บ/Discord outbox ก่อนตอบ LINE (fast path ไม่เกิน 5 events และมี budget 1.5 วินาที ไม่ใช่ latency ที่รับประกัน) Discord ส่งต่อทันทีหลัง response ผ่าน Next.js after() งานที่ช้าหรือขัดข้องยังอยู่ในคิวและมี GitHub schedule เป็น fallback: ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) รอบ fallback ทุก 5 นาทีเปิดเป็นค่าเริ่มต้น ไม่ต้องกด Re-run; push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบ ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=false` เมื่อต้องการหยุด fallback GitHub schedule อาจล่าช้าได้ รายละเอียดอยู่ใน DEPLOYMENT.md

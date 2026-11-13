@@ -2109,3 +2109,9 @@ td strong {
     scroll-behavior: auto !important;
   }
 }
+.clear-data-panel { margin-top: 24px; border-color: var(--danger, #dc5252); }
+.clear-data-panel > p { margin: 12px 0; }
+.clear-counts > div { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; }
+.clear-counts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.clear-ack { display: flex; align-items: flex-start; gap: 10px; }
+.clear-ack input { width: auto; margin-top: 4px; }

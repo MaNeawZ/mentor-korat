@@ -30,6 +30,7 @@ export const permissions = [
   "permissions.manage",
   "audit.view",
   "settings.manage",
+  "data.clear",
 ] as const;
 export type Permission = (typeof permissions)[number];
 export type Role = "CENTER_HEAD" | "HR" | "MENTOR";

@@ -116,6 +116,10 @@ Migration runner ใช้ advisory transaction lock, version/checksum history, 
 
 ## 7. Operations
 
+ฟีเจอร์ล้างข้อมูลต้องติดตั้ง migration `202611140001_clear_leave_data.sql` หนึ่งครั้งก่อนใช้งาน หากใช้ SQL Editor ให้เปิด `supabase/setup-sql-editor.sql` ฉบับล่าสุด คัดลอกทั้งหมดไปรันใน Supabase SQL Editor ของโปรเจกต์เดิม ตัว bundle ตรวจ checksum/ข้าม migration ที่ติดตั้งแล้ว และไม่เรียกฟังก์ชันล้างข้อมูลระหว่างติดตั้ง จากนั้น deploy main ล่าสุดและเข้าสู่ระบบใหม่เพื่อรับสิทธิ์ `data.clear` ของหัวหน้าศูนย์
+
+ปุ่มอยู่ที่ **ตั้งค่าระบบ → ล้างข้อมูลใบลา** ตรวจจำนวนก่อนพิมพ์ `ล้างข้อมูลใบลา` และระบุเหตุผล จะลบใบลาทั้งหมด ไม่ใช่เฉพาะรายการที่มีคำว่าทดสอบ ข้อมูลหลักและ audit ยังอยู่ ไม่ลบข้อความในห้อง Discord ไฟล์ Storage ใช้ durable cleanup queue และ worker เดิม ระบบแสดงจำนวนค้าง/ล้มเหลว ลองใหม่ได้จากหน้าเดียวกัน ลิงก์อัปโหลดเดิมจะใช้ไม่ได้ หลีกเลี่ยงให้ผู้ใช้ส่งใบลา/อัปโหลดระหว่างเคลียร์ข้อมูล รายการใหม่ที่มาหลัง transaction ยังคงรับตามปกติ
+
 ตรวจ `/api/health`, queue depth/FAILED และจำนวน parsing issues เป็นประจำ ตรวจ external scheduler ทำงานตามรอบที่เลือก งาน PROCESSING หมด lease หลัง 5 นาทีจึงพร้อมให้ worker รอบถัดไป claim ใหม่ FAILED ลองใหม่ได้ด้วย `POST /api/queues/retry` หรือปุ่มในหน้าการเชื่อมต่อ พร้อมยืนยันและ audit
 
 Health response ของเวอร์ชันล่าสุดมี `build` (commit สั้น ถ้า Vercel ให้ค่า metadata) และ `workerMode: "inline-line-after-discord"` สำหรับยืนยันว่าเว็บใช้เส้นทางสร้างใบลา/แจ้งเตือนเว็บใน webhook แล้วส่ง Discord ต่อหลัง response หากตอบเพียง `status` หรือเป็นโหมดเก่า อย่าเพิ่งสรุปว่าเวอร์ชันใหม่นี้ถูก deploy แล้ว และอย่าใช้ผล run จาก event `push`/`workflow_dispatch` แทนหลักฐานว่า event `schedule` ทำงาน ตรวจชนิด event ของ run จริงใน GitHub ด้วย

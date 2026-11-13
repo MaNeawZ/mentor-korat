@@ -57,6 +57,7 @@ beforeEach(() => {
   mocks.from.mockImplementation(query);
   mocks.rpc.mockImplementation(
     async (name: string, input: { queue: string }) => {
+      if (name === "claim_storage_cleanup") return { data: [], error: null };
       if (name !== "claim_jobs") throw new Error("Unexpected worker RPC");
       return {
         data:
