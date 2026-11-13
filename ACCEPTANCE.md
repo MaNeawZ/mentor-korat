@@ -36,7 +36,7 @@
 - [ ] edit mode PATCH message เดิม; events mode แสดง status ของแต่ละ event
 - [ ] simulated Discord 429/outage มี retry/backoff; ใบลาบันทึกสำเร็จแม้ส่ง Discord ไม่ได้
 - [ ] optional DM ส่งให้ Mentor mapping จริง; DM ไม่ได้มีเว็บแจ้ง fallback
-- [ ] worker ทุกนาทีทำงาน; lease/FAILED/retry/audit ตรวจได้จาก UI
+- [ ] external scheduler ที่เลือกทำงานจริง (GitHub Actions ทุก 5 นาที หรือ provider ทุก 1 นาที); ตั้ง URL/secret และทดสอบ Run workflow; lease/FAILED/retry/audit ตรวจได้จาก UI
 
 ## Deployment / isolation / performance
 

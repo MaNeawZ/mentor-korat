@@ -38,6 +38,8 @@ npm.cmd run dev
 | `DISCORD_BOT_TOKEN` | optional: ส่ง upload link ใน DM ให้ Mentor |
 | `DISCORD_GUILD_ID` | optional: ระบุ server สำหรับการตั้งค่า mapping; ไม่จำเป็นสำหรับ webhook/DM |
 | `CRON_SECRET` | ตรวจสิทธิ์เรียก worker สุ่มอย่างน้อย 32 ตัวอักษร |
+| `WORKER_BASE_URL` | GitHub repository secret: origin จริงของแอปสำหรับ external scheduler |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | optional GitHub secret สำหรับเรียก deployment ที่มี protection |
 | `SUPABASE_MIGRATION_DATABASE_URL` | PostgreSQL connection ของ migration runner ใช้ direct/session pooler ไม่ใช้ transaction pooler |
 | `BOOTSTRAP_USER_ID`, `BOOTSTRAP_USER_NAME` | สร้างหัวหน้าศูนย์คนแรกจากบัญชี Supabase Auth ที่มีอยู่ ใช้ครั้งเดียวแล้วนำออก |
 | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | GitHub production environment secrets |
@@ -111,3 +113,7 @@ npm.cmd audit --omit=dev
 ```
 
 ดู [DEPLOYMENT.md](DEPLOYMENT.md), [ARCHITECTURE.md](ARCHITECTURE.md), [SECURITY.md](SECURITY.md), [VERIFICATION.md](VERIFICATION.md) และ [ACCEPTANCE.md](ACCEPTANCE.md) ก่อนใช้งานจริง
+
+## External scheduler
+
+ไม่มี cron ใน Vercel config แล้ว หลัง deploy ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) → Actions → **Process Worker** → Run workflow เพื่อทดสอบ → ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=true` เพื่อเปิดรอบทุก 5 นาที GitHub schedule อาจล่าช้าได้ หากต้องการทุก 1 นาที ใช้ scheduler ภายนอกเรียก endpoint เดิมพร้อม Authorization header แทน รายละเอียดและ Deployment Protection อยู่ใน DEPLOYMENT.md

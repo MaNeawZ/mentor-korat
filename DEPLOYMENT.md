@@ -55,7 +55,7 @@ Optional DM: สร้าง bot และนำเข้า server โดยเ
 
 1. สร้าง project framework Next.js, Node 24, region ใกล้ Supabase ใส่ runtime env ตาม .env.example
 2. ตั้ง NEXT_PUBLIC_APP_URL เป็น production origin จริงก่อน build ตั้ง UPLOAD_TOKEN_SECRET/CRON_SECRET แบบถาวรและมีความยาวอย่างน้อย 32 ตัวอักษร
-3. Vercel cron ทุกนาทีใน vercel.json ต้องใช้แผนที่รองรับ หากใช้ external scheduler ให้เรียก GET `/api/cron/process` ด้วย `Authorization: Bearer <CRON_SECRET>` ทุกนาที ห้ามส่ง secret ใน query string
+3. ไม่มี Vercel cron ใน vercel.json แล้ว ใช้ external scheduler ตามหัวข้อด้านล่าง เรียก GET `/api/cron/process` ด้วย `Authorization: Bearer <CRON_SECRET>` ห้ามส่ง secret ใน query string
 4. Function maxDuration=300 วินาทีต้องอยู่ใน plan ที่รองรับ batch ส่ง Discord สูงสุด 5 งาน/รอบ
 5. Vercel มี request body limit: frontend บีบอัดภาพก่อนส่ง หากไฟล์หลังบีบอัดยังใหญ่เกิน provider limit ให้เลือกภาพขนาดเล็กลง หรือโฮสต์ Next.js บน runtime ที่รองรับ 8 MB ระบบ server จำกัดไฟล์ต้นฉบับ 8 MB และรูป 24MP
 6. ปิด Git auto-deploy เพื่อให้ GitHub Actions เป็นผู้ควบคุม migration ก่อน deploy มี `git.deploymentEnabled=false` ใน config ตรวจ setting ใน project ด้วย
@@ -76,6 +76,36 @@ CI ยังติดตั้ง Chromium เพื่อรัน browser test
 
 `deploy-prd.yml` push prd: checks → additive migration → pull env → production build → deploy → health check → job summary ใช้ concurrency group ป้องกัน deploy ซ้อน ถ้า migration fail จะไม่ build/deploy ไม่เปิดเผย credentials ใน output
 
+### External scheduler (ไม่ใช้ Vercel Cron)
+
+เตรียม `.github/workflows/process-worker.yml` เรียก worker ทุก 5 นาทีผ่าน GitHub Actions มี concurrency control และกด Run workflow เองได้ ไม่ใช้ database password และไม่รัน migration อัตโนมัติ
+
+หลัง deploy แอปสำเร็จ:
+
+1. ใน GitHub repository → Settings → Secrets and variables → Actions → Secrets เพิ่ม repository secrets:
+   - `WORKER_BASE_URL`: production origin จริง เช่น `https://your-app.vercel.app` ไม่ต้องใส่ `/api/cron/process`
+   - `CRON_SECRET`: ค่าเดียวกับ Vercel อย่างน้อย 32 ตัวอักษร
+   - `VERCEL_AUTOMATION_BYPASS_SECRET`: optional ถ้าเปิด Vercel Deployment Protection ใช้ secret ที่สร้างไว้สำหรับ automation
+2. ไป Actions → **Process Worker** → **Run workflow** แล้วตรวจ log ว่า `Worker completed. Processed jobs: ...` ตัวเลข 0 หมายถึงเรียกสำเร็จแต่ไม่มีงานพร้อมประมวลผล
+3. เมื่อทดสอบผ่าน ไป Settings → Secrets and variables → Actions → **Variables** เพิ่ม repository variable `WORKER_SCHEDULER_ENABLED` ค่า `true` เพื่อเปิดรอบอัตโนมัติ ตั้งเป็น `false` เพื่อหยุดรอบอัตโนมัติ
+
+Workflow ต้องอยู่ใน default branch (ตอนนี้ main) จึงจะทำงานตามเวลา โดยค่าเริ่มต้นจะข้าม scheduled job จนกว่าจะเปิด variable ข้างต้น ไม่มีการส่ง secret ใน URL หรือพิมพ์ headers/body ลง log และไม่ตาม HTTP redirect เพื่อไม่ส่ง bearer token ไปปลายทางอื่น หากไม่ตั้ง secrets, ได้ HTTP error, ได้หน้า login HTML หรือรูปแบบ JSON ไม่ถูกต้อง จะ fail ชัดเจน
+
+GitHub scheduled Actions ถี่สุด 5 นาที อาจเริ่มล่าช้า/ถูกข้ามเมื่อระบบหนาแน่น ไม่รับประกันว่า LINE/Discord จะอัปเดตภายใน 5 นาที และ public repository ที่ไม่มีกิจกรรม 60 วันอาจถูกปิด schedule อัตโนมัติ ตรวจ GitHub Actions usage/quota และสถานะ schedule เป็นระยะ อ่าน [GitHub schedule limitations](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+
+หากต้องการทุก **1 นาที** ให้ใช้ scheduler ภายนอกที่รองรับ custom headers โดยตั้ง:
+
+```text
+Method: GET
+URL: https://your-app.vercel.app/api/cron/process
+Header: Authorization: Bearer <ค่า CRON_SECRET เดียวกับ Vercel>
+Interval: every 1 minute
+```
+
+หากมี Deployment Protection เพิ่ม header `x-vercel-protection-bypass` ตาม [Vercel automation bypass](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) ปิด GitHub schedule variable เมื่อใช้ provider อื่นเพื่อไม่เรียกซ้ำ อย่าเพียงลบ cron แล้วปล่อย worker ไม่มีผู้เรียก เพราะ LINE events และ Discord จะค้างในคิว
+
+ทั้งสองแบบใช้ endpoint เดิมและยังตรวจ bearer secret เหมือนเดิม ไม่เปลี่ยน Supabase schema หรือข้อมูลเดิม การถอด cron แก้ข้อจำกัดการ deploy cron บน Hobby แต่ยังต้องตรวจเงื่อนไขแผนสำหรับการใช้งานองค์กรและ quota ของ provider เอง
+
 ## 6. Migration safety และ rollback
 
 Migration runner ใช้ advisory transaction lock, version/checksum history, atomic transaction รวมทุก pending file และไม่ใช้ reset SQL ที่อยู่ใน manifest ผ่านการตรวจ scope แล้ว; regex เป็น guard เสริม **ไม่ใช่ SQL sandbox** ห้ามนำ SQL ที่ไม่เชื่อถือมาเพิ่ม manifest โดยไม่ review
@@ -84,7 +114,7 @@ Migration runner ใช้ advisory transaction lock, version/checksum history, 
 
 ## 7. Operations
 
-ตรวจ `/api/health`, queue depth/FAILED และจำนวน parsing issues เป็นประจำ ตรวจ scheduler ทำงาน ไม่ปล่อยงาน PROCESSING ค้างเกิน lease (5 นาที) FAILED ลองใหม่ได้ด้วย `POST /api/queues/retry` หรือปุ่มในหน้าการเชื่อมต่อ พร้อมยืนยันและ audit
+ตรวจ `/api/health`, queue depth/FAILED และจำนวน parsing issues เป็นประจำ ตรวจ external scheduler ทำงานตามรอบที่เลือก งาน PROCESSING หมด lease หลัง 5 นาทีจึงพร้อมให้ worker รอบถัดไป claim ใหม่ FAILED ลองใหม่ได้ด้วย `POST /api/queues/retry` หรือปุ่มในหน้าการเชื่อมต่อ พร้อมยืนยันและ audit
 
 ปิด request URL/body logging และ analytics สำหรับ `/upload/*` และ `/api/upload/*` ที่ reverse proxy/APM/CDN เนื่องจาก URL มี bearer token ห้าม paste token ใน ticket/log หรือแชร์ช่องกลาง หน้า upload ไม่ใส่ tracker และตั้ง no-referrer
 

@@ -8,7 +8,7 @@
 |---|---|
 | `npm run lint` | ผ่าน ไม่มี error/warning |
 | `npm run typecheck` | ผ่าน TypeScript strict |
-| `npm test` | ผ่าน 58 tests / 4 files |
+| `npm test` | ผ่าน 73 tests / 6 files หลังเพิ่ม SQL Editor export และ external scheduler |
 | `npm run migrations:check` | ผ่าน 3 migrations พร้อม checksum |
 | `npm run build` | ผ่าน Next.js 16.4.6 production build |
 | `npm run test:browser` | ผ่าน 8 tests บน production server ที่รันในเครื่อง |
@@ -39,6 +39,8 @@ Environment ที่ใช้ตรวจ: Windows, Node.js 22.12.0, npm 10.4.0
 Browser preview / Computer Use ในแอปเปิดไม่ได้จาก kernel asset path ของ environment จึงใช้ automated browser tests กับ Edge ที่ติดตั้งอยู่แทน ผล browser ข้างต้นมาจากการรันจริง ไม่ได้อ้างจากการดู source
 
 ## สิ่งที่ยังไม่ได้ทดสอบ / ไม่ได้ดำเนินการ
+
+การแก้ไข external scheduler: ถอด `crons` จาก vercel.json, เพิ่ม GitHub workflow ทุก 5 นาทีแบบเปิดใช้ด้วย repository variable และเพิ่ม caller script ที่ส่ง bearer header โดยไม่ตาม redirect ทดสอบ 13 กรณีสำหรับ caller/config/auth/error handling ด้วย mocked HTTP แล้ว รวมทั้ง lint/typecheck/production build ผ่าน ยังไม่ได้ตั้ง GitHub secrets/variable หรือเรียก worker บน Vercel จริง ทดสอบเพิ่มเติมการ export SQL Editor 2 กรณีรันบน PGlite และรวมอยู่ในยอด 73 tests ข้างต้น
 
 - ไม่รัน migration ใน Supabase project จริง และไม่เปลี่ยนข้อมูล/schema `public` ใด ๆ ของผู้ใช้
 - ยังไม่มี credentials จึงไม่ได้ทดสอบ Supabase Auth/SMTP/PostgREST/Storage policies บน project จริง
