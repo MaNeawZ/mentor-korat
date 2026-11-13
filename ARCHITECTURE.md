@@ -84,4 +84,4 @@ PR/push dev → lint/type/tests/migration checks/build → PR prd → production
 - ต้องตรงรหัสและชื่อพนักงาน (ละ whitespace ได้) ถ้าไม่ตรงแจ้งให้ตรวจสอบ
 - หัวหน้าศูนย์ดูแลบัญชีผ่าน Supabase Auth + app UI; ไม่ส่งคำเชิญ/อีเมลสร้างบัญชีอัตโนมัติ
 - retention_days เป็น policy ที่บันทึกได้ ยังไม่ทำ automatic deletion เพื่อป้องกันหลักฐานหายโดยไม่ได้ทบทวน
-- ต้องมี external scheduler: เตรียม GitHub Actions ทุก 5 นาที (ต้องเปิด variable หลังตั้ง secrets และเวลาเริ่มอาจล่าช้า) หรือใช้ provider ภายนอกทุก 1 นาที ไม่มี Vercel cron ใน config
+- ต้องมี external scheduler: เตรียม GitHub Actions ทุก 5 นาที เปิดอัตโนมัติหลังตั้ง secrets (ตั้ง variable=false เพื่อหยุดชั่วคราว; เวลาเริ่มอาจล่าช้า) หรือใช้ provider ภายนอกทุก 1 นาที ไม่มี Vercel cron ใน config

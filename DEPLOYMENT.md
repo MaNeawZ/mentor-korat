@@ -89,9 +89,9 @@ CI ยังติดตั้ง Chromium เพื่อรัน browser test
    - `CRON_SECRET`: ค่าเดียวกับ Vercel อย่างน้อย 32 ตัวอักษร
    - `VERCEL_AUTOMATION_BYPASS_SECRET`: optional ถ้าเปิด Vercel Deployment Protection ใช้ secret ที่สร้างไว้สำหรับ automation
 2. ไป Actions → **Process Worker** → **Run workflow** แล้วตรวจ log ว่า `Worker completed. Processed jobs: ...` ตัวเลข 0 หมายถึงเรียกสำเร็จแต่ไม่มีงานพร้อมประมวลผล
-3. เมื่อทดสอบผ่าน ไป Settings → Secrets and variables → Actions → **Variables** เพิ่ม repository variable `WORKER_SCHEDULER_ENABLED` ค่า `true` เพื่อเปิดรอบอัตโนมัติ ตั้งเป็น `false` เพื่อหยุดรอบอัตโนมัติ
+3. รอบอัตโนมัติเปิดเป็นค่าเริ่มต้น ไม่ต้องเพิ่ม variable เพื่อเริ่มใช้งาน หลัง push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบอัตโนมัติด้วย หากต้องการหยุดชั่วคราว ให้เพิ่ม repository variable `WORKER_SCHEDULER_ENABLED=false` หากเคยตั้ง false ไว้ ให้ลบ variable หรือเปลี่ยนเป็น true เพื่อเปิดกลับ
 
-Workflow ต้องอยู่ใน default branch (ตอนนี้ main) จึงจะทำงานตามเวลา โดยค่าเริ่มต้นจะข้าม scheduled job จนกว่าจะเปิด variable ข้างต้น ไม่มีการส่ง secret ใน URL หรือพิมพ์ headers/body ลง log และไม่ตาม HTTP redirect เพื่อไม่ส่ง bearer token ไปปลายทางอื่น หากไม่ตั้ง secrets, ได้ HTTP error, ได้หน้า login HTML หรือรูปแบบ JSON ไม่ถูกต้อง จะ fail ชัดเจน
+Workflow ต้องอยู่ใน default branch (ตอนนี้ main) จึงจะทำงานตามเวลา ไม่ต้องกด Re-run เพื่อเริ่มแต่ละรอบ ไม่มีการส่ง secret ใน URL หรือพิมพ์ headers/body ลง log และไม่ตาม HTTP redirect เพื่อไม่ส่ง bearer token ไปปลายทางอื่น หากไม่ตั้ง secrets, ได้ HTTP error, ได้หน้า login HTML หรือรูปแบบ JSON ไม่ถูกต้อง จะ fail ชัดเจน งานที่ fail จะมีรอบ schedule ถัดไปลองเรียกใหม่
 
 GitHub scheduled Actions ถี่สุด 5 นาที อาจเริ่มล่าช้า/ถูกข้ามเมื่อระบบหนาแน่น ไม่รับประกันว่า LINE/Discord จะอัปเดตภายใน 5 นาที และ public repository ที่ไม่มีกิจกรรม 60 วันอาจถูกปิด schedule อัตโนมัติ ตรวจ GitHub Actions usage/quota และสถานะ schedule เป็นระยะ อ่าน [GitHub schedule limitations](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 
@@ -104,7 +104,7 @@ Header: Authorization: Bearer <ค่า CRON_SECRET เดียวกับ Ve
 Interval: every 1 minute
 ```
 
-หากมี Deployment Protection เพิ่ม header `x-vercel-protection-bypass` ตาม [Vercel automation bypass](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) ปิด GitHub schedule variable เมื่อใช้ provider อื่นเพื่อไม่เรียกซ้ำ อย่าเพียงลบ cron แล้วปล่อย worker ไม่มีผู้เรียก เพราะ LINE events และ Discord จะค้างในคิว
+หากมี Deployment Protection เพิ่ม header `x-vercel-protection-bypass` ตาม [Vercel automation bypass](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) ตั้ง `WORKER_SCHEDULER_ENABLED=false` เมื่อใช้ provider อื่นเพื่อไม่เรียกซ้ำ อย่าเพียงลบ cron แล้วปล่อย worker ไม่มีผู้เรียก เพราะ LINE events และ Discord จะค้างในคิว
 
 ทั้งสองแบบใช้ endpoint เดิมและยังตรวจ bearer secret เหมือนเดิม ไม่เปลี่ยน Supabase schema หรือข้อมูลเดิม การถอด cron แก้ข้อจำกัดการ deploy cron บน Hobby แต่ยังต้องตรวจเงื่อนไขแผนสำหรับการใช้งานองค์กรและ quota ของ provider เอง
 

@@ -1,5 +1,10 @@
 name: Process Worker
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/process-worker.yml"
+      - "scripts/invoke-worker.mjs"
   schedule:
     # Every five minutes, offset from the start of the hour.
     - cron: "3-58/5 * * * *"
@@ -11,8 +16,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   process:
-    # Configure repository secrets, test manually, then enable the schedule.
-    if: github.event_name == 'workflow_dispatch' || vars.WORKER_SCHEDULER_ENABLED == 'true'
+    # Enabled by default; explicitly set the variable to false to pause schedules.
+    if: github.event_name == 'workflow_dispatch' || vars.WORKER_SCHEDULER_ENABLED != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
