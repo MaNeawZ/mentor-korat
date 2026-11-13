@@ -116,6 +116,8 @@ Migration runner ใช้ advisory transaction lock, version/checksum history, 
 
 ## 7. Operations
 
+ปุ่ม **ล้างประวัติเก่าทั้งหมด** ต้องติดตั้ง `202611140003_clear_audit_history.sql` เพิ่มหนึ่งครั้ง (หรือใช้ SQL Editor bundle ล่าสุด) และ deploy main ล่าสุด หัวหน้าศูนย์ที่มีสิทธิ์ `data.clear` ใช้ได้จากหน้าประวัติการดำเนินการหรือหน้าตั้งค่า แยกจากปุ่มล้างใบลาเพื่อให้ล้าง audit หลังเคลียร์ใบลาไปแล้วได้ มี preview/fingerprint/lock/คำยืนยันเฉพาะ/เหตุผล หากประวัติเปลี่ยนระหว่างยืนยันจะต้องตรวจจำนวนใหม่ ลบเฉพาะ audit เก่าทั้งหมดและเขียนบันทึกผู้ล้าง/เวลา/เหตุผล/จำนวนที่ลบกลับ 1 รายการใน transaction เดียว การติดตั้ง migration ไม่เรียกการลบจริง
+
 หากกดล้างข้อมูลแล้วได้ 503 หลังติดตั้ง migration แรก ให้ติดตั้ง `202611140002_clear_data_safeupdate.sql` เพิ่ม (หรือรัน `supabase/setup-sql-editor.sql` ฉบับล่าสุดทั้งไฟล์) เพื่อรองรับ API session ที่เปิด safeupdate การอัปเดตนี้ไม่ลบข้อมูลระหว่างติดตั้งและไม่ปิด safeupdate จากนั้น deploy main ล่าสุด หากยังไม่สำเร็จ ข้อความใหม่จะแสดงรหัส `CLEAR_DB_*` สำหรับวินิจฉัย โดย log เก็บเฉพาะ SQLSTATE ไม่เก็บ payload หรือข้อมูลส่วนตัว
 
 ฟีเจอร์ล้างข้อมูลต้องติดตั้ง migration `202611140001_clear_leave_data.sql` หนึ่งครั้งก่อนใช้งาน หากใช้ SQL Editor ให้เปิด `supabase/setup-sql-editor.sql` ฉบับล่าสุด คัดลอกทั้งหมดไปรันใน Supabase SQL Editor ของโปรเจกต์เดิม ตัว bundle ตรวจ checksum/ข้าม migration ที่ติดตั้งแล้ว และไม่เรียกฟังก์ชันล้างข้อมูลระหว่างติดตั้ง จากนั้น deploy main ล่าสุดและเข้าสู่ระบบใหม่เพื่อรับสิทธิ์ `data.clear` ของหัวหน้าศูนย์

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const CLEAR_CONFIRMATION = "ล้างข้อมูลใบลา";
+export const AUDIT_CLEAR_CONFIRMATION = "ล้างประวัติการดำเนินการ";
 export const clearCountLabels: Record<string, string> = {
   leaves: "ใบลา",
   evidence: "ไฟล์หลักฐาน",
@@ -27,4 +28,10 @@ export const clearRequestSchema = z.discriminatedUnion("action", [
     reason: z.string().trim().min(5, "กรุณาระบุเหตุผลอย่างน้อย 5 ตัวอักษร").max(500),
   }),
   z.object({ action: z.literal("retry_files") }),
+  z.object({
+    action: z.literal("clear_history"),
+    snapshot: z.string().regex(/^[0-9a-f]{32}$/),
+    confirmation: z.literal(AUDIT_CLEAR_CONFIRMATION),
+    reason: z.string().trim().min(5, "กรุณาระบุเหตุผลอย่างน้อย 5 ตัวอักษร").max(500),
+  }),
 ]);

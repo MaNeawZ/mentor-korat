@@ -4,12 +4,14 @@ import { check } from "@/lib/api";
 import { thaiDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/leave-table";
+import { ClearHistoryPanel } from "@/components/clear-history-panel";
+import { can } from "@/lib/domain";
 export default async function Audit({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  await requireUser("audit.view");
+  const user = await requireUser("audit.view");
   const filters = await searchParams,
     page = Math.max(1, Number(filters.page) || 1),
     db = await sessionClient();
@@ -52,6 +54,9 @@ export default async function Audit({
         )}
         <Pagination page={page} count={r.count || 0} path="/audit-logs" />
       </section>
+      {user.role === "CENTER_HEAD" && (
+        <ClearHistoryPanel enabled={can(user, "data.clear")} />
+      )}
     </>
   );
 }

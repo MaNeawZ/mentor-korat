@@ -62,6 +62,23 @@ beforeAll(async () => {
 afterAll(async () => {
   await db?.close();
 });
+async function historyPreview() {
+  return (
+    await db.query<{ p: { count: number; snapshot: string } }>(
+      "SELECT mentor_korat.preview_audit_clear() p",
+    )
+  ).rows[0].p;
+}
+async function clearHistory(
+  snapshot: string,
+  phrase = "ล้างประวัติการดำเนินการ",
+  reason = "เคลียร์ประวัติทดสอบ",
+) {
+  return db.query<{ r: { cleared: number; retained: number } }>(
+    "SELECT mentor_korat.clear_audit_history($1,$2,$3) r",
+    [snapshot, phrase, reason],
+  );
+}
 it("keeps explicit predicates on every effective deletion for safeupdate API sessions", async () => {
   await db.exec("RESET ROLE");
   const { rows } = await db.query<{ definition: string }>(
@@ -216,4 +233,95 @@ it("restricts cleanup claims to service role, leases once, and lets the head ret
       )
     ).rows,
   ).toEqual([{ status: "PENDING", attempts: 0 }]);
+});
+it("limits history preview and deletion to an active permitted center head", async () => {
+  await db.exec("RESET ROLE;SET ROLE anon");
+  await expect(historyPreview()).rejects.toThrow(/permission denied/);
+  await expect(clearHistory("x")).rejects.toThrow(/permission denied/);
+  for (const id of [mentor, hr]) {
+    await actor(id);
+    await expect(historyPreview()).rejects.toThrow("FORBIDDEN");
+    await expect(clearHistory("x")).rejects.toThrow("FORBIDDEN");
+  }
+  await db.exec(
+    `RESET ROLE;UPDATE mentor_korat.app_users SET active=false WHERE id='${head}'`,
+  );
+  await actor(head);
+  await expect(historyPreview()).rejects.toThrow("FORBIDDEN");
+  await expect(clearHistory("x")).rejects.toThrow("FORBIDDEN");
+  await db.exec(
+    `RESET ROLE;UPDATE mentor_korat.app_users SET active=true WHERE id='${head}';INSERT INTO mentor_korat.user_permission_overrides VALUES('${head}','data.clear',false)`,
+  );
+  await actor(head);
+  await expect(clearHistory("x")).rejects.toThrow("FORBIDDEN");
+  await db.exec(
+    `RESET ROLE;DELETE FROM mentor_korat.user_permission_overrides WHERE user_id='${head}'`,
+  );
+});
+it("clears all old history atomically with confirmation, reason and stale-preview protection, retaining one clear record", async () => {
+  await db.exec("RESET ROLE");
+  await db.exec(
+    `SELECT mentor_korat.audit('${head}','${employee}','MANAGE_employee');SELECT mentor_korat.audit('${head}',NULL,'MANAGE_setting');INSERT INTO mentor_korat.leave_requests(id,document_number,employee_id,mentor_id,assignment_status,leave_type,leave_date,period,reason) VALUES('${lid}','LE-256911009999','${employee}','${mentor}','ASSIGNED','ลาป่วย','2026-11-14','FULL','test')`,
+  );
+  await actor(head);
+  const initial = await historyPreview();
+  expect(initial.count).toBeGreaterThan(1);
+  await expect(clearHistory(initial.snapshot, "wrong")).rejects.toThrow(
+    "INVALID_CLEAR_CONFIRMATION",
+  );
+  await expect(
+    clearHistory(initial.snapshot, "ล้างประวัติการดำเนินการ", "x"),
+  ).rejects.toThrow("INVALID_CLEAR_CONFIRMATION");
+  await db.exec(
+    `RESET ROLE;SELECT mentor_korat.audit('${head}',NULL,'NEW_ACTION')`,
+  );
+  await actor(head);
+  await expect(clearHistory(initial.snapshot)).rejects.toThrow(
+    "STALE_CLEAR_PREVIEW",
+  );
+  const current = await historyPreview();
+  expect(current.count).toBe(initial.count + 1);
+  const result = (await clearHistory(current.snapshot)).rows[0].r;
+  expect(result).toEqual({ cleared: current.count, retained: 1 });
+  expect((await historyPreview()).count).toBe(1);
+  await db.exec("RESET ROLE");
+  const rows = (
+    await db.query<{
+      action: string;
+      actor_id: string;
+      new_data: { deleted_count: number; reason: string };
+    }>("SELECT action,actor_id,new_data FROM mentor_korat.audit_logs")
+  ).rows;
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    action: "DATA_CLEAR_AUDIT_HISTORY",
+    actor_id: head,
+    new_data: { deleted_count: current.count, reason: "เคลียร์ประวัติทดสอบ" },
+  });
+  for (const [table, n] of [
+    ["employees", 1],
+    ["departments", 1],
+    ["app_users", 3],
+    ["app_settings", 3],
+    ["leave_requests", 1],
+    ["storage_cleanup_jobs", 1],
+  ] as const)
+    expect(
+      (await db.query(`SELECT count(*)::int n FROM mentor_korat.${table}`))
+        .rows,
+    ).toEqual([{ n }]);
+  expect((await db.query("SELECT * FROM public.existing_system")).rows).toEqual(
+    [{ value: "untouched" }],
+  );
+  expect(
+    (await db.query("SELECT count(*)::int n FROM auth.users")).rows,
+  ).toEqual([{ n: 3 }]);
+  const def = (
+    await db.query<{ definition: string }>(
+      "SELECT pg_get_functiondef('mentor_korat.clear_audit_history(text,text,text)'::regprocedure) definition",
+    )
+  ).rows[0].definition;
+  expect(def).toMatch(
+    /DELETE FROM mentor_korat.audit_logs WHERE id IS NOT NULL;/,
+  );
 });

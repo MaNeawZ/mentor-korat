@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { EntityForm } from "@/components/entity-form";
 import { SettingsTabs } from "@/components/settings-tabs";
 import { ClearDataPanel } from "@/components/clear-data-panel";
+import { ClearHistoryPanel } from "@/components/clear-history-panel";
 import { can } from "@/lib/domain";
 export default async function Settings() {
   const user = await requireUser("settings.manage");
@@ -56,6 +57,9 @@ export default async function Settings() {
       </section>
       {user.role === "CENTER_HEAD" && (
         <ClearDataPanel enabled={can(user, "data.clear")} />
+      )}
+      {user.role === "CENTER_HEAD" && (
+        <ClearHistoryPanel enabled={can(user, "data.clear")} />
       )}
     </>
   );

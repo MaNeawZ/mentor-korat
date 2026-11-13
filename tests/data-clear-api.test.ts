@@ -37,6 +37,43 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllEnvs());
+it("previews and clears history independently without waking the leave worker", async () => {
+  m.rpc.mockResolvedValue({
+    data: { count: 4, snapshot: input.snapshot },
+    error: null,
+  });
+  expect(
+    (
+      await GET(
+        new Request(
+          "https://example.com/api/settings/clear-data?scope=history",
+        ),
+      )
+    ).status,
+  ).toBe(200);
+  expect(m.rpc).toHaveBeenCalledWith("preview_audit_clear");
+  m.rpc.mockResolvedValue({ data: { cleared: 4, retained: 1 }, error: null });
+  const response = await POST(
+    request({
+      ...input,
+      action: "clear_history",
+      confirmation: "ล้างประวัติการดำเนินการ",
+    }),
+  );
+  expect(await response.json()).toEqual({ ok: true, cleared: 4, retained: 1 });
+  expect(m.rpc).toHaveBeenLastCalledWith("clear_audit_history", {
+    expected_snapshot: input.snapshot,
+    confirmation: "ล้างประวัติการดำเนินการ",
+    reason: input.reason,
+  });
+  expect(m.wake).not.toHaveBeenCalled();
+});
+it("requires the history-specific phrase rather than the leave-clear phrase", async () => {
+  expect(
+    (await POST(request({ ...input, action: "clear_history" }))).status,
+  ).toBe(400);
+  expect(m.rpc).not.toHaveBeenCalled();
+});
 it("denies anonymous, non-head and missing permissions before querying data", async () => {
   m.user.mockResolvedValue(null);
   expect((await GET()).status).toBe(401);

@@ -54,11 +54,15 @@ function checkClear(result: {
   }
   check(result);
 }
-export async function GET() {
+export async function GET(request?: Request) {
   try {
     await clearUser();
     const db = await sessionClient();
-    const r = await db.rpc("preview_leave_data_clear");
+    const history =
+      request && new URL(request.url).searchParams.get("scope") === "history";
+    const r = await db.rpc(
+      history ? "preview_audit_clear" : "preview_leave_data_clear",
+    );
     checkClear(r);
     return NextResponse.json(r.data, {
       headers: { "Cache-Control": "private, no-store" },
@@ -73,6 +77,18 @@ export async function POST(request: Request) {
     await clearUser();
     const input = clearRequestSchema.parse(await request.json());
     const db = await sessionClient();
+    if (input.action === "clear_history") {
+      const r = await db.rpc("clear_audit_history", {
+        expected_snapshot: input.snapshot,
+        confirmation: input.confirmation,
+        reason: input.reason,
+      });
+      checkClear(r);
+      return NextResponse.json(
+        { ok: true, ...r.data },
+        { headers: { "Cache-Control": "private, no-store" } },
+      );
+    }
     if (input.action === "retry_files") {
       const r = await db.rpc("retry_storage_cleanup");
       checkClear(r);

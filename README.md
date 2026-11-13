@@ -124,6 +124,8 @@ npm.cmd audit --omit=dev
 
 ติดตั้ง patch `202611140002_clear_data_safeupdate.sql` ด้วยเพื่อรองรับ safeupdate ของ Supabase API หากเคยติดตั้งตัวแรกแล้วให้รันเฉพาะ patch นี้ หรือใช้ SQL Editor bundle ฉบับล่าสุดที่ข้าม migration เดิมโดยตรวจ checksum
 
+หากต้องการล้าง **ประวัติการดำเนินการ** เพิ่มเติม ให้ใช้ปุ่ม **ล้างประวัติเก่าทั้งหมด** ในหน้าประวัติหรือหน้าตั้งค่า (migration `202611140003_clear_audit_history.sql`) แสดงจำนวนก่อนยืนยัน ต้องพิมพ์ `ล้างประวัติการดำเนินการ` พร้อมเหตุผล ปุ่มนี้ลบ audit เก่าทั้งหมด รวมการแก้พนักงานและการตั้งค่า และบันทึกการล้างครั้งล่าสุดไว้ 1 รายการ ไม่ลบข้อมูลใบลา/พนักงาน/การตั้งค่าปัจจุบัน ประวัติจากการทำงานครั้งใหม่หลังล้างจะถูกบันทึกตามปกติ
+
 ## External scheduler
 
 ไม่มี cron ใน Vercel config แล้ว เมื่อรับข้อความ LINE จะบันทึก event อย่างทนทาน จากนั้นอ่านข้อมูลและเรียก transaction สร้างใบลา/แจ้งเตือนเว็บ/Discord outbox ก่อนตอบ LINE (fast path ไม่เกิน 5 events และมี budget 1.5 วินาที ไม่ใช่ latency ที่รับประกัน) Discord ส่งต่อทันทีหลัง response ผ่าน Next.js after() งานที่ช้าหรือขัดข้องยังอยู่ในคิวและมี GitHub schedule เป็น fallback: ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) รอบ fallback ทุก 5 นาทีเปิดเป็นค่าเริ่มต้น ไม่ต้องกด Re-run; push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบ ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=false` เมื่อต้องการหยุด fallback GitHub schedule อาจล่าช้าได้ รายละเอียดอยู่ใน DEPLOYMENT.md
