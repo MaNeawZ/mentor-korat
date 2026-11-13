@@ -62,6 +62,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await db?.close();
 });
+it("keeps explicit predicates on every effective deletion for safeupdate API sessions", async () => {
+  await db.exec("RESET ROLE");
+  const { rows } = await db.query<{ definition: string }>(
+    "SELECT pg_get_functiondef('mentor_korat.clear_leave_data(text,text,text)'::regprocedure) definition",
+  );
+  const deletes = rows[0].definition.match(/DELETE FROM[^;]+;/gi) || [];
+  expect(deletes).toHaveLength(10);
+  for (const statement of deletes)
+    expect(statement).toMatch(/WHERE (?:id|leave_id) IS NOT NULL;/i);
+});
 it("requires an active center head even with an explicit permission override", async () => {
   await db.exec(
     `INSERT INTO mentor_korat.user_permission_overrides VALUES('${mentor}','data.clear',true),('${hr}','data.clear',true);SET ROLE anon;`,

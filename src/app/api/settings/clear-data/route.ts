@@ -20,12 +20,38 @@ function checkClear(result: {
   error: { message: string; code?: string } | null;
 }) {
   const error = result.error;
+  if (error && /(?:DELETE|UPDATE) requires a WHERE clause/i.test(error.message))
+    throw new HttpError(
+      503,
+      "กรุณาติดตั้ง migration 202611140002_clear_data_safeupdate.sql แล้วลองใหม่ (CLEAR_SAFEUPDATE)",
+    );
   if (error?.code === "PGRST202")
     throw new HttpError(503, "กรุณาติดตั้ง migration ฟีเจอร์ล้างข้อมูลก่อนใช้งาน");
   if (error?.message.includes("STALE_CLEAR_PREVIEW"))
     throw new HttpError(409, "ข้อมูลเปลี่ยนแปลงแล้ว กรุณาตรวจจำนวนข้อมูลและยืนยันใหม่");
   if (error?.message.includes("CLEAR_BUSY") || error?.code === "55P03")
     throw new HttpError(409, "มีงานกำลังประมวลผล กรุณารอให้เสร็จแล้วตรวจจำนวนใหม่");
+  if (error?.code === "57014")
+    throw new HttpError(
+      503,
+      "การล้างข้อมูลใช้เวลาเกินกำหนด กรุณาตรวจสอบสถานะและจำนวนข้อมูลใหม่ (CLEAR_TIMEOUT)",
+    );
+  if (
+    error &&
+    !/FORBIDDEN|INVALID_|REASON_|TOKEN_|CANNOT_|duplicate key/.test(
+      error.message,
+    )
+  ) {
+    // SQLSTATE only: provider messages/details can contain employee data or paths.
+    const code = /^[A-Z0-9]{5,10}$/.test(error.code || "")
+      ? error.code
+      : "UNKNOWN";
+    console.error("Clear-data database operation failed", { code });
+    throw new HttpError(
+      503,
+      `ไม่สามารถล้างข้อมูลได้ กรุณาแจ้งรหัส CLEAR_DB_${code} ให้ผู้ดูแลระบบ`,
+    );
+  }
   check(result);
 }
 export async function GET() {

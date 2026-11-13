@@ -95,3 +95,28 @@ it("retries durable file failures through the guarded RPC", async () => {
   expect(m.rpc).toHaveBeenCalledWith("retry_storage_cleanup");
   expect(m.wake).toHaveBeenCalledOnce();
 });
+it("explains safeupdate failures and emits only sanitized codes for unknown database errors", async () => {
+  m.rpc.mockResolvedValue({
+    data: null,
+    error: { code: "21000", message: "DELETE requires a WHERE clause" },
+  });
+  const r = await POST(request());
+  expect(r.status).toBe(503);
+  expect((await r.json()).error).toContain("CLEAR_SAFEUPDATE");
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    m.rpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "23514",
+        message: "private employee data in provider error",
+      },
+    });
+    const failure = await POST(request());
+    expect((await failure.json()).error).toContain("CLEAR_DB_23514");
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private employee");
+    expect(m.wake).not.toHaveBeenCalled();
+  } finally {
+    log.mockRestore();
+  }
+});
