@@ -182,7 +182,9 @@ it.each(["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"])(
     );
     expect(field.value).toContain(`https://example.com/upload/${token.token}`);
     expect(field.value).toContain("ส่งให้พนักงาน");
-    const url = field.value.split("\n")[0];
+    const url = field.value
+      .split("\n")
+      .find((line: string) => line.startsWith("https://"));
     expect(hashToken(new URL(url).pathname.split("/").pop()!)).toBe(token.hash);
     expect(JSON.stringify(payload)).not.toContain(token.nonce);
     expect(payload.allowed_mentions).toEqual({ parse: [], users: [] });
@@ -254,7 +256,7 @@ it.each(["LINE_UNSENT", "LINE_CORRECTED"])(
       parse: [],
       users: ["234567890123456789"],
     });
-    expect(notice.content).toContain(
+    expect(notice.embeds[0].title).toContain(
       kind === "LINE_UNSENT" ? "ยกเลิกข้อความ LINE" : "อัปเดตข้อมูลใบลา",
     );
     if (lineRetracted) {
@@ -294,13 +296,16 @@ it.each([
     expect(card.embeds[0].fields).toContainEqual({
       name: "สถานะ",
       value: statusLabels[status],
+      inline: true,
     });
     expect(send.mock.calls[1][1].method).toBe("POST");
     const notification = JSON.parse(send.mock.calls[1][1].body as string);
     expect(notification.content).toContain("<@234567890123456789>");
-    expect(notification.content).toContain("LE-256911001234");
-    expect(notification.content).toContain(statusLabels[status]);
-    expect(notification.content).toContain("/leaves/leave-id");
+    expect(notification.embeds[0].fields).toContainEqual(
+      expect.objectContaining({ name: "เลขที่ใบลา", value: "LE-256911001234" }),
+    );
+    expect(notification.embeds[0].title).toContain(statusLabels[status]);
+    expect(notification.embeds[0].url).toContain("/leaves/leave-id");
     expect(notification.allowed_mentions).toEqual({
       parse: [],
       users: ["234567890123456789"],
@@ -329,6 +334,7 @@ it("posts a single mentioned card in events mode and shows both the event and cu
   expect(card.embeds[0].fields).toContainEqual({
     name: "สถานะ",
     value: statusLabels.VERIFIED,
+    inline: true,
   });
   expect(card.embeds[0].fields).toContainEqual({
     name: "สถานะของเหตุการณ์นี้",

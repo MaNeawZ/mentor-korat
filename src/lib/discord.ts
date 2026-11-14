@@ -2,6 +2,41 @@ import { statusLabels, type Status } from "./domain";
 function mentorMention(id: string | null) {
   return id && /^\d{15,22}$/.test(id) ? id : null;
 }
+const statusStyle: Record<
+  Status,
+  { icon: string; color: number; hint: string }
+> = {
+  WAITING_EVIDENCE: {
+    icon: "📎",
+    color: 0xe6a23c,
+    hint: "ส่งลิงก์ให้พนักงานแนบหลักฐาน เพื่อเริ่มตรวจสอบ",
+  },
+  WAITING_MENTOR_REVIEW: {
+    icon: "🔎",
+    color: 0x7565df,
+    hint: "ได้รับหลักฐานแล้ว รอ Mentor ตรวจสอบขั้นต้น",
+  },
+  WAITING_FINAL_REVIEW: {
+    icon: "📋",
+    color: 0x4c8cda,
+    hint: "Mentor ตรวจขั้นต้นแล้ว รอหัวหน้าตรวจสอบขั้นสุดท้าย",
+  },
+  VERIFIED: { icon: "✅", color: 0x27a981, hint: "ตรวจสอบหลักฐานเรียบร้อยแล้ว" },
+  REUPLOAD_REQUIRED: {
+    icon: "🔁",
+    color: 0xe99a38,
+    hint: "กรุณาส่งลิงก์ล่าสุดให้พนักงานแนบหลักฐานใหม่",
+  },
+  REJECTED: {
+    icon: "⛔",
+    color: 0xda6470,
+    hint: "กรุณาเปิดรายการเพื่อดูเหตุผลการปฏิเสธ",
+  },
+};
+const author = { name: "KORAT  ·  ระบบติดตามใบลา" };
+function escapeText(value: string) {
+  return value.replace(/([\\*_~`|>])/g, "\\$1");
+}
 export function discordLineNotification(
   leave: {
     id: string;
@@ -12,17 +47,32 @@ export function discordLineNotification(
   appUrl: string,
 ) {
   const mention = mentorMention(leave.discord_user_id);
+  const unsent = kind === "LINE_UNSENT";
+  const link = new URL(`/leaves/${leave.id}`, appUrl).toString();
   return {
-    content: [
-      mention ? `<@${mention}>` : null,
-      kind === "LINE_UNSENT"
-        ? `⚠️ พนักงานยกเลิกข้อความ LINE ของใบลา ${leave.document_number} กรุณาตรวจข้อมูลล่าสุดก่อนดำเนินการต่อ`
-        : `✏️ อัปเดตข้อมูลใบลา ${leave.document_number} หลังแก้ไขข้อความต้นทางแล้ว กรุณาใช้ข้อมูลและลิงก์ล่าสุด`,
-      new URL(`/leaves/${leave.id}`, appUrl).toString(),
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    content: mention ? `<@${mention}>` : "",
     allowed_mentions: { parse: [], users: mention ? [mention] : [] },
+    embeds: [
+      {
+        author,
+        title: unsent ? "⚠️ ยกเลิกข้อความ LINE ต้นทาง" : "✏️ อัปเดตข้อมูลใบลาแล้ว",
+        url: link,
+        color: unsent ? 0xe6a23c : 0x4c8cda,
+        description: unsent
+          ? "พนักงานยกเลิกข้อความเดิม กรุณาตรวจข้อมูลล่าสุดก่อนดำเนินการต่อ"
+          : "ข้อมูลต้นทางได้รับการแก้ไขแล้ว กรุณาใช้รายละเอียดและลิงก์อัปโหลดล่าสุด",
+        fields: [
+          { name: "เลขที่ใบลา", value: leave.document_number, inline: true },
+          {
+            name: "ดำเนินการต่อ",
+            value: `[เปิดใบลาและตรวจรายละเอียด →](${link})`,
+            inline: true,
+          },
+        ],
+        footer: { text: "แจ้งให้ Mentor ที่รับผิดชอบทราบ" },
+        timestamp: new Date().toISOString(),
+      },
+    ],
   };
 }
 export function discordStatusNotification(
@@ -36,19 +86,31 @@ export function discordStatusNotification(
   appUrl: string,
 ) {
   const mention = mentorMention(leave.discord_user_id);
+  const style = statusStyle[changedStatus],
+    link = new URL(`/leaves/${leave.id}`, appUrl).toString();
   return {
-    content: [
-      mention ? `<@${mention}>` : null,
-      `🔄 เปลี่ยนสถานะใบลา ${leave.document_number}`,
-      `สถานะที่เปลี่ยน: ${statusLabels[changedStatus]}`,
-      changedStatus !== leave.status
-        ? `สถานะล่าสุด: ${statusLabels[leave.status]}`
-        : null,
-      new URL(`/leaves/${leave.id}`, appUrl).toString(),
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    content: mention ? `<@${mention}>` : "",
     allowed_mentions: { parse: [], users: mention ? [mention] : [] },
+    embeds: [
+      {
+        author,
+        title: `${style.icon} ${statusLabels[changedStatus]}`,
+        url: link,
+        color: style.color,
+        description: style.hint,
+        fields: [
+          { name: "เลขที่ใบลา", value: leave.document_number, inline: true },
+          {
+            name: "สถานะล่าสุด",
+            value: statusLabels[leave.status],
+            inline: true,
+          },
+          { name: "ดำเนินการต่อ", value: `[เปิดรายละเอียดใบลา →](${link})` },
+        ],
+        footer: { text: "อัปเดตความคืบหน้า · ตรวจหลักฐานเท่านั้น" },
+        timestamp: new Date().toISOString(),
+      },
+    ],
   };
 }
 export function discordPayload(
@@ -70,22 +132,36 @@ export function discordPayload(
   eventStatus?: Status,
 ) {
   const mention = mentorMention(l.discord_user_id);
+  const style = statusStyle[l.status],
+    link = new URL(`/leaves/${l.id}`, appUrl).toString();
   return {
-    content: mention ? `<@${mention}>` : undefined,
+    content: mention ? `<@${mention}>` : "",
     allowed_mentions: { parse: [], users: mention ? [mention] : [] },
     embeds: [
       {
+        author,
         title: l.line_retracted
           ? "⚠️ ข้อความ LINE ถูกยกเลิก — รอแก้ไข/ตรวจสอบ"
-          : `📋 ใบลา · ${statusLabels[l.status]}`,
-        url: `${appUrl}/leaves/${l.id}`,
-        color: l.status === "VERIFIED" ? 0x10b981 : 0x6366f1,
+          : `${style.icon} ${statusLabels[l.status]}`,
+        description: l.line_retracted
+          ? "กรุณารอข้อความแก้ไขหรือให้หัวหน้าตรวจสอบก่อนดำเนินการต่อ"
+          : style.hint,
+        url: link,
+        color: l.line_retracted ? 0xe6a23c : style.color,
         fields: [
           {
             name: "พนักงาน",
-            value: `${l.employee_code} · ${l.employee_name}`.slice(0, 1024),
+            value:
+              `**${escapeText(l.employee_name)}**\nรหัสพนักงาน \`${l.employee_code}\``.slice(
+                0,
+                1024,
+              ),
           },
-          { name: "แผนก", value: l.department || "—", inline: true },
+          {
+            name: "แผนก",
+            value: escapeText(l.department) || "—",
+            inline: true,
+          },
           {
             name: "วันที่ / ประเภท",
             value: `${l.leave_date} · ${l.leave_type}`,
@@ -95,10 +171,10 @@ export function discordPayload(
             name: "เหตุผล",
             value: l.line_retracted
               ? "ข้อความต้นทางถูกยกเลิก กรุณาตรวจข้อมูลใหม่"
-              : l.reason.slice(0, 1024) || "—",
+              : escapeText(l.reason).slice(0, 1024) || "—",
           },
-          { name: "เลขที่ใบลา", value: l.document_number },
-          { name: "สถานะ", value: statusLabels[l.status] },
+          { name: "เลขที่ใบลา", value: l.document_number, inline: true },
+          { name: "สถานะ", value: statusLabels[l.status], inline: true },
           ...(eventStatus && eventStatus !== l.status
             ? [{ name: "สถานะของเหตุการณ์นี้", value: statusLabels[eventStatus] }]
             : []),
@@ -108,12 +184,13 @@ export function discordPayload(
             ? [
                 {
                   name: "ลิงก์อัปโหลดหลักฐาน — ส่งต่อให้พนักงาน",
-                  value: `${uploadUrl}\nMentor คัดลอกลิงก์นี้ส่งให้พนักงานได้เลย ใช้อัปโหลดได้ครั้งเดียว`,
+                  value: `คัดลอกลิงก์ด้านล่างส่งให้พนักงาน · อัปโหลดได้ครั้งเดียว\n${uploadUrl}`,
                 },
               ]
             : []),
+          { name: "ดูรายละเอียด", value: `[เปิดใบลาในระบบ →](${link})` },
         ],
-        footer: { text: "ตรวจหลักฐานเท่านั้น ไม่ใช่การอนุมัติวันลาในระบบ HR" },
+        footer: { text: "KORAT · ตรวจหลักฐานเท่านั้น ไม่ใช่การอนุมัติวันลาในระบบ HR" },
       },
     ],
   };

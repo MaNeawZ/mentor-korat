@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiUser, check, checkOrigin, errorResponse } from "@/lib/api";
 import { sessionClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { notificationSelect } from "@/lib/notifications";
 export async function GET() {
   try {
     await apiUser();
@@ -9,7 +10,7 @@ export async function GET() {
     const [recent, count] = await Promise.all([
       db
         .from("notifications")
-        .select("id,title,leave_id,read_at,created_at")
+        .select(notificationSelect)
         .order("created_at", { ascending: false })
         .limit(12),
       db

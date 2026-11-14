@@ -164,7 +164,10 @@ export async function runWorker() {
               process.env.NEXT_PUBLIC_APP_URL!,
             )
           : null;
-      if (lineNotice) payload.content = lineNotice.content;
+      if (lineNotice) {
+        payload.content = lineNotice.content;
+        payload.embeds[0].description = lineNotice.embeds[0].description;
+      }
       let message;
       let editedExisting = false;
       if (map.data && mode.data?.value === "edit") {

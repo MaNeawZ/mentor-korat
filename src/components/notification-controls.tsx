@@ -2,17 +2,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
-export function NotificationControls({ id }: { id?: string }) {
+import { CheckCheck, LoaderCircle } from "lucide-react";
+export function NotificationControls({
+  id,
+  disabled = false,
+}: {
+  id?: string;
+  disabled?: boolean;
+}) {
   const [pending, setPending] = useState(false),
     [message, setMessage] = useState("");
   const router = useRouter();
   return (
     <>
       <Button
-        variant="outline"
-        disabled={pending}
+        variant={id ? "ghost" : "outline"}
+        className={id ? "notification-read-one" : undefined}
+        aria-label={id ? "ทำเครื่องหมายว่าอ่านแล้ว" : undefined}
+        title={id ? "ทำเครื่องหมายว่าอ่านแล้ว" : undefined}
+        disabled={pending || disabled}
         onClick={async () => {
           setPending(true);
+          setMessage("");
           try {
             const r = await fetch("/api/notifications", {
               method: "POST",
@@ -20,7 +31,10 @@ export function NotificationControls({ id }: { id?: string }) {
               body: JSON.stringify({ id: id || null }),
             });
             if (!r.ok) setMessage("บันทึกไม่สำเร็จ");
-            else router.refresh();
+            else {
+              window.dispatchEvent(new Event("notifications-changed"));
+              router.refresh();
+            }
           } catch {
             setMessage("เชื่อมต่อไม่สำเร็จ");
           } finally {
@@ -28,7 +42,12 @@ export function NotificationControls({ id }: { id?: string }) {
           }
         }}
       >
-        {pending ? "กำลังบันทึก…" : id ? "อ่านแล้ว" : "ทำเครื่องหมายอ่านทั้งหมด"}
+        {pending ? (
+          <LoaderCircle size={16} className="notification-spinner" />
+        ) : (
+          <CheckCheck size={16} />
+        )}
+        {!id && (pending ? "กำลังบันทึก…" : "อ่านทั้งหมด")}
       </Button>
       {message && <span role="alert">{message}</span>}
     </>
