@@ -28,6 +28,17 @@ export async function ingestLineJob(
   types: string[],
   signal?: AbortSignal,
 ) {
+  if (job.payload.type === "unsend") {
+    const secret = process.env.UPLOAD_TOKEN_SECRET || "";
+    const token = secret.length >= 32 ? newToken(secret) : null;
+    const query = db.rpc("process_line_unsend", {
+      event_id: job.id,
+      hash: token?.hash ?? null,
+      token_nonce: token?.nonce ?? null,
+    });
+    check(await (signal ? query.abortSignal(signal) : query));
+    return;
+  }
   const message = job.payload.message;
   if (
     !message ||
@@ -74,11 +85,17 @@ export async function ingestIncomingLineJobs(
   if (!jobs.length || budgetMs <= 0) return;
   const signal = AbortSignal.timeout(Math.min(1500, Math.floor(budgetMs)));
   try {
-    const types = await loadLeaveTypes(db, signal);
-    for (const job of jobs.slice(0, 5)) {
+    const batch = jobs.slice(0, 5);
+    let types: string[] | undefined;
+    for (const job of [
+      ...batch.filter((j) => j.payload.type === "unsend"),
+      ...batch.filter((j) => j.payload.type !== "unsend"),
+    ]) {
       if (signal.aborted) break;
       try {
-        await ingestLineJob(db, job, types, signal);
+        if (job.payload.type !== "unsend" && !types)
+          types = await loadLeaveTypes(db, signal);
+        await ingestLineJob(db, job, types || [], signal);
       } catch {
         // A lost response might follow a successful DB commit. Never reset the
         // event here; the queued retry will inspect its transactional state.

@@ -2,6 +2,29 @@ import { statusLabels, type Status } from "./domain";
 function mentorMention(id: string | null) {
   return id && /^\d{15,22}$/.test(id) ? id : null;
 }
+export function discordLineNotification(
+  leave: {
+    id: string;
+    document_number: string;
+    discord_user_id: string | null;
+  },
+  kind: "LINE_UNSENT" | "LINE_CORRECTED",
+  appUrl: string,
+) {
+  const mention = mentorMention(leave.discord_user_id);
+  return {
+    content: [
+      mention ? `<@${mention}>` : null,
+      kind === "LINE_UNSENT"
+        ? `⚠️ พนักงานยกเลิกข้อความ LINE ของใบลา ${leave.document_number} กรุณาตรวจข้อมูลล่าสุดก่อนดำเนินการต่อ`
+        : `✏️ อัปเดตข้อมูลใบลา ${leave.document_number} หลังแก้ไขข้อความต้นทางแล้ว กรุณาใช้ข้อมูลและลิงก์ล่าสุด`,
+      new URL(`/leaves/${leave.id}`, appUrl).toString(),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    allowed_mentions: { parse: [], users: mention ? [mention] : [] },
+  };
+}
 export function discordStatusNotification(
   leave: {
     id: string;
@@ -40,6 +63,7 @@ export function discordPayload(
     employee_code: string;
     department: string;
     discord_user_id: string | null;
+    line_retracted?: boolean;
   },
   appUrl: string,
   uploadUrl?: string,
@@ -51,7 +75,9 @@ export function discordPayload(
     allowed_mentions: { parse: [], users: mention ? [mention] : [] },
     embeds: [
       {
-        title: `📋 ใบลา · ${statusLabels[l.status]}`,
+        title: l.line_retracted
+          ? "⚠️ ข้อความ LINE ถูกยกเลิก — รอแก้ไข/ตรวจสอบ"
+          : `📋 ใบลา · ${statusLabels[l.status]}`,
         url: `${appUrl}/leaves/${l.id}`,
         color: l.status === "VERIFIED" ? 0x10b981 : 0x6366f1,
         fields: [
@@ -65,13 +91,19 @@ export function discordPayload(
             value: `${l.leave_date} · ${l.leave_type}`,
             inline: true,
           },
-          { name: "เหตุผล", value: l.reason.slice(0, 1024) || "—" },
+          {
+            name: "เหตุผล",
+            value: l.line_retracted
+              ? "ข้อความต้นทางถูกยกเลิก กรุณาตรวจข้อมูลใหม่"
+              : l.reason.slice(0, 1024) || "—",
+          },
           { name: "เลขที่ใบลา", value: l.document_number },
           { name: "สถานะ", value: statusLabels[l.status] },
           ...(eventStatus && eventStatus !== l.status
             ? [{ name: "สถานะของเหตุการณ์นี้", value: statusLabels[eventStatus] }]
             : []),
           ...(uploadUrl &&
+          !l.line_retracted &&
           ["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(l.status)
             ? [
                 {

@@ -3,7 +3,11 @@ import { adminClient } from "./supabase/server";
 import { check } from "./api";
 import { deriveToken } from "./security";
 import { loadLeaveTypes, ingestLineJob } from "./line/ingest";
-import { discordPayload, discordStatusNotification } from "./discord";
+import {
+  discordPayload,
+  discordStatusNotification,
+  discordLineNotification,
+} from "./discord";
 import { statuses, type Status } from "./domain";
 import { processEvidenceCleanup } from "./storage-cleanup";
 class DeliveryError extends Error {
@@ -42,13 +46,15 @@ async function discordRequest(
 export async function runWorker() {
   const db = adminClient();
   const storageProcessed = await processEvidenceCleanup(db);
-  const types = await loadLeaveTypes(db);
   const line = await db.rpc("claim_jobs", { queue: "line" });
   check(line);
   let processed = storageProcessed;
+  let types: string[] | undefined;
   for (const job of line.data || []) {
     try {
-      await ingestLineJob(db, job, types);
+      if (job.payload.type !== "unsend" && !types)
+        types = await loadLeaveTypes(db);
+      await ingestLineJob(db, job, types || []);
       processed++;
     } catch {
       check(
@@ -109,7 +115,10 @@ export async function runWorker() {
       let uploadUrl: string | undefined;
       // Reuse the existing ACTIVE link; delivery retries must not rotate it.
       // Check current state, even when events mode renders an older status.
-      if (["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(l.status)) {
+      if (
+        !l.line_retracted &&
+        ["WAITING_EVIDENCE", "REUPLOAD_REQUIRED"].includes(l.status)
+      ) {
         const token = await db
           .from("evidence_upload_tokens")
           .select("nonce")
@@ -135,6 +144,7 @@ export async function runWorker() {
           employee_name: l.employees.name,
           department: l.employees.departments?.name || "—",
           discord_user_id: mentor?.data?.discord_user_id || null,
+          line_retracted: l.line_retracted,
         },
         process.env.NEXT_PUBLIC_APP_URL!,
         uploadUrl,
@@ -142,6 +152,19 @@ export async function runWorker() {
           ? (job.kind as Status)
           : undefined,
       );
+      const lineNotice =
+        job.kind === "LINE_UNSENT" || job.kind === "LINE_CORRECTED"
+          ? discordLineNotification(
+              {
+                id: l.id,
+                document_number: l.document_number,
+                discord_user_id: mentor?.data?.discord_user_id || null,
+              },
+              job.kind,
+              process.env.NEXT_PUBLIC_APP_URL!,
+            )
+          : null;
+      if (lineNotice) payload.content = lineNotice.content;
       let message;
       let editedExisting = false;
       if (map.data && mode.data?.value === "edit") {
@@ -174,23 +197,25 @@ export async function runWorker() {
       // A new card (including a 404 fallback) already carries the mentor mention.
       if (
         editedExisting &&
-        statuses.includes(job.kind as Status) &&
-        job.kind !== "WAITING_EVIDENCE"
+        (lineNotice ||
+          (statuses.includes(job.kind as Status) &&
+            job.kind !== "WAITING_EVIDENCE"))
       ) {
         const noticeUrl = new URL(process.env.DISCORD_WEBHOOK_URL);
         noticeUrl.searchParams.set("wait", "true");
         await discordRequest(
           noticeUrl.toString(),
-          discordStatusNotification(
-            {
-              id: l.id,
-              document_number: l.document_number,
-              status: l.status as Status,
-              discord_user_id: mentor?.data?.discord_user_id || null,
-            },
-            job.kind as Status,
-            process.env.NEXT_PUBLIC_APP_URL!,
-          ),
+          lineNotice ||
+            discordStatusNotification(
+              {
+                id: l.id,
+                document_number: l.document_number,
+                status: l.status as Status,
+                discord_user_id: mentor?.data?.discord_user_id || null,
+              },
+              job.kind as Status,
+              process.env.NEXT_PUBLIC_APP_URL!,
+            ),
         );
       }
       if (

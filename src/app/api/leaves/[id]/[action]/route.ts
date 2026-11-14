@@ -24,7 +24,7 @@ export async function POST(
     const db = await sessionClient();
     const visible = await db
       .from("leave_requests")
-      .select("id")
+      .select("id,line_retracted")
       .eq("id", id)
       .maybeSingle();
     check(visible);
@@ -48,7 +48,16 @@ export async function POST(
       );
     }
     if (action === "correct") {
-      const payload = correctionSchema.parse(await request.json());
+      const input = correctionSchema.parse(await request.json());
+      const token = visible.data.line_retracted
+        ? newToken(process.env.UPLOAD_TOKEN_SECRET || "")
+        : null;
+      const payload = {
+        ...input,
+        ...(token
+          ? { new_token_hash: token.hash, new_token_nonce: token.nonce }
+          : {}),
+      };
       check(await db.rpc("correct_leave", { lid: id, payload }));
     } else if (action === "review") {
       const input = reviewSchema.parse(await request.json());

@@ -11,7 +11,12 @@ const eventSchema = z
   .object({
     webhookEventId: z.string().min(1).max(200),
     type: z.string(),
-    source: z.object({ type: z.string(), groupId: z.string().optional() }),
+    source: z.object({
+      type: z.string(),
+      groupId: z.string().optional(),
+      userId: z.string().max(200).optional(),
+    }),
+    unsend: z.object({ messageId: z.string().min(1).max(200) }).optional(),
     message: z
       .object({
         type: z.string(),
@@ -65,8 +70,8 @@ export async function POST(request: Request) {
     const rows = events
       .filter(
         (e) =>
-          e.type === "message" &&
-          e.message?.type === "text" &&
+          ((e.type === "message" && e.message?.type === "text") ||
+            (e.type === "unsend" && !!e.unsend?.messageId)) &&
           e.source.type === "group" &&
           allowed.has(e.source.groupId),
       )

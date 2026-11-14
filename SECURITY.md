@@ -32,6 +32,8 @@ Login/recovery และ public upload ใช้ shared PostgreSQL rate limiter 
 
 LINE ตรวจ HMAC SHA256 raw body ก่อน JSON parse/DB access จำกัด body, allowlist group, duplicate event/document constraints รายชื่อกลุ่มรอยืนยันมาจาก signed event แต่ผู้ดูแลต้องยืนยันว่าเป็นกลุ่มที่ต้องการก่อนเปิด
 
+Unsend ใช้ message ID และ group จาก signed webhook เก็บ tombstone ขั้นต่ำและ redact raw/event text รวม parsed issue ของข้อความนั้น การแทนที่เลขใบลาเดิมอัตโนมัติต้องมี unsend ของ source ปัจจุบันและ match LINE sender/group/employee/new timestamp โดยไม่เคยมีหลักฐาน/ใช้ upload token/ผ่าน review มาก่อน ไม่เดาผู้ส่งของรายการเก่า ปิด token เก่าทันทีและออกใหม่เมื่อแทนที่สำเร็จ ระหว่าง line_retracted ค้าง DB trigger ป้องกันการเปลี่ยนสถานะ Only CENTER_HEAD ที่มี leaves.edit แก้รายการไม่ปิดด้วยเหตุผลเพื่อรับรองข้อมูลได้ เก็บหลักฐาน ผลตรวจ และประวัติธุรกิจเดิม ไม่แก้หรือเปิด terminal state อัตโนมัติ
+
 Discord จำกัด allowed_mentions.users ตาม Mentor ID และ parse=[] รูปหลักฐานใหม่ถูกแนบไปห้องที่ผู้ดูแลกำหนดตามคำขอผู้ใช้ ใช้ชื่อไฟล์สุ่มและ WebP ที่ล้าง metadata แล้ว ไม่ใส่ upload token ในชื่อไฟล์หรือข้อความหลักฐาน ห้องต้องจำกัดสมาชิกทั้งเหตุผลการลาและรูปหลักฐาน Helper ตรวจ HTTPS/hostname/webhook ID/attachment path, ปิด redirect และจำกัด download bytes ไม่ดึง URL จาก client หากเปลี่ยน webhook ต้องคงช่องทางอ่านหลักฐานเดิม มิฉะนั้นเว็บจะแจ้งว่าอ่านไม่ได้ ไม่เปิดเผย webhook token ใน error/log
 
 ## Transactions / audit

@@ -30,6 +30,11 @@ export function checkOrigin(request: Request) {
 export function check(result: { error: { message: string } | null }) {
   if (result.error) {
     const m = result.error.message;
+    if (/LINE_MESSAGE_RETRACTED/.test(m))
+      throw new HttpError(
+        409,
+        "ข้อความ LINE ต้นทางถูกยกเลิก กรุณาให้หัวหน้าตรวจสอบและแก้ไขข้อมูลก่อนดำเนินการต่อ",
+      );
     if (/VERSION_CONFLICT/.test(m))
       throw new HttpError(409, "รายการเปลี่ยนแปลงแล้ว กรุณาโหลดข้อมูลใหม่");
     if (/FORBIDDEN/.test(m)) throw new HttpError(403, "ไม่มีสิทธิ์ดำเนินการ");

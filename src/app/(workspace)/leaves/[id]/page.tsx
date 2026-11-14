@@ -65,12 +65,21 @@ export default async function Detail({
       >
         <StatusBadge status={leave.status} />
       </PageHeader>
+      {leave.line_retracted && (
+        <p className="error-box" role="alert">
+          ข้อความ LINE ต้นทางถูกยกเลิก — ระงับลิงก์อัปโหลดและการตรวจต่อไว้ก่อน
+          รอข้อความแก้ไขจากผู้ส่งเดิม หากมีหลักฐานหรือผ่านการตรวจแล้ว
+          ให้หัวหน้าตรวจข้อความใหม่และใช้ปุ่มแก้ไขข้อมูลพร้อมระบุเหตุผล
+          รายการที่ปิดแล้วจะไม่แก้อัตโนมัติ
+        </p>
+      )}
       <div className="detail-grid">
         <div className="detail-main">
           <section className="panel detail-panel">
             <div className="row between">
               <h2>รายละเอียดการลา</h2>
               {can(user, "leaves.edit") &&
+                (!leave.line_retracted || user.role === "CENTER_HEAD") &&
                 !["VERIFIED", "REJECTED"].includes(leave.status) && (
                   <EntityForm
                     trigger="แก้ไขข้อมูลที่ Bot อ่านผิด"
@@ -197,12 +206,14 @@ export default async function Detail({
                 <p>ยังไม่มีหลักฐานที่อัปโหลด</p>
               </div>
             )}
-            <ReviewActions
-              id={id}
-              version={leave.version}
-              status={leave.status}
-              user={user}
-            />
+            {!leave.line_retracted && (
+              <ReviewActions
+                id={id}
+                version={leave.version}
+                status={leave.status}
+                user={user}
+              />
+            )}
           </section>
           <section className="panel detail-panel">
             <h2>

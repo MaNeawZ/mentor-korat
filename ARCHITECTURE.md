@@ -16,6 +16,8 @@ Supabase SSR cookies → Proxy refresh → Server `getUser()` → `my_profile()`
 
 ## LINE webhook
 
+Unsend/correction: รับ signed unsend จาก active groups ใน durable queue เดิม เก็บ group/message tombstone ขั้นต่ำ redact raw/event text และ parsed issue ของข้อความที่ยกเลิก ตั้ง line_retracted/revoke ACTIVE links/แจ้งเว็บ+Discord transaction เดียว Ingest และ unsend serialize ด้วย transaction advisory lock ร่วมกัน การแทนที่ใช้ leave/raw IDs เดิมเฉพาะ draft ก่อนหลักฐาน/ตรวจ พร้อม match original sender/group/employee/new timestamp และ CAS version increment ออก token ใหม่ Notify LINE_UNSENT/LINE_CORRECTED แยกจาก evidence status Worker PATCH การ์ดและ POST mention ใหม่แม้ evidence status ไม่เปลี่ยน Out-of-order correction ที่เป็น duplicate ถูก retry เมื่อ unsend มาถึง โดยใช้ guard ชุดเดิม ไม่แก้ทับรายการที่หัวหน้าแก้หรือผ่าน workflow ไปแล้ว
+
 1. จำกัด body ที่อ่านใน memory และตรวจ SHA256 HMAC จาก raw body
 2. เก็บเฉพาะ group ID จาก event ที่ signature ถูกต้องเป็นกลุ่มรอยืนยัน `active=false` ไม่เก็บข้อความจากกลุ่มที่ไม่อนุญาต
 3. สำหรับกลุ่ม active บันทึก `integration_events` โดยใช้ `webhookEventId` เป็น PK และ ignore duplicate ลงทะเบียน Next.js after() และอ่าน/บันทึกใบลาจาก events ที่เพิ่งรับก่อนตอบ 200 (ไม่เกิน 5 events ต่อ request, ใช้ AbortSignal budget 1.5 วินาทีร่วมกัน) transaction เดียวกันสร้าง web notification และ Discord outbox ไม่มีการเรียก Discord ก่อนตอบ LINE

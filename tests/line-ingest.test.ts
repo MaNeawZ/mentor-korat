@@ -125,3 +125,20 @@ it("leaves processing to the after-response worker when enqueueing already used 
   expect(rpc).not.toHaveBeenCalled();
   expect(settings.abortSignal).not.toHaveBeenCalled();
 });
+it("routes unsend receipts to their transactional handler without requiring leave-type settings", async () => {
+  const { db, rpc, settings } = database("invalid configuration");
+  await ingestIncomingLineJobs(db, [
+    {
+      id: "unsend-event",
+      payload: { type: "unsend", unsend: { messageId: "original-message" } },
+    },
+  ]);
+  expect(rpc).toHaveBeenCalledWith(
+    "process_line_unsend",
+    expect.objectContaining({
+      event_id: "unsend-event",
+      hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    }),
+  );
+  expect(settings.abortSignal).not.toHaveBeenCalled();
+});

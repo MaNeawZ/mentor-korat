@@ -134,6 +134,7 @@ export type Leave = {
   period: string;
   reason: string;
   version: number;
+  line_retracted?: boolean;
   created_at: string;
   employees: {
     code: string;

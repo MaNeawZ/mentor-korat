@@ -31,6 +31,10 @@
 
 ## 2. LINE
 
+ฟีเจอร์ยกเลิกข้อความแล้วส่งแก้ไขเลขใบลาเดิม: รัน migration `202611150001_line_unsend_corrections.sql` หรือ SQL Editor bundle ล่าสุด ก่อน deploy โค้ดใหม่ ไม่ต้องเปลี่ยน Webhook URL เดิม รองรับเฉพาะ event `unsend` และข้อความ text ที่ส่งใหม่ ไม่อ้างว่ารองรับ native messageEdited ต้องกด “ยกเลิกข้อความ” ซึ่งส่ง unsend webhook การลบเฉพาะในเครื่องของผู้ใช้ไม่ทำให้ระบบได้รับเหตุการณ์ การแก้อัตโนมัติต้องยืนยัน user ID/group/employee/timestamp และไม่มีหลักฐานหรือ review มาก่อน รูปเดิม/ผลตรวจไม่ถูกลบหรือแก้ทับ
+
+ถ้าผู้ส่งเดิมยืนยันไม่ได้ (รวมรายการเก่าที่ไม่ได้เก็บ user ID) จะคงข้อมูลและหลักฐานพร้อมเตือนหัวหน้า ผู้มี role CENTER_HEAD และ leaves.edit แก้ร่าง/รายการที่ยังไม่ปิดจากหน้าใบลา พร้อมระบุเหตุผลเพื่อปลดคำเตือนและออกลิงก์ใหม่เมื่อยังต้องอัปโหลด ระหว่างคำเตือนค้างจะไม่ให้ตรวจขั้นต่อไป ข้อความดิบของข้อความที่ unsend ถูก redact และมี tombstone ขั้นต่ำกัน redelivery; ประวัติธุรกิจเดิมยังอยู่ ปุ่มล้างข้อมูลยังเก็บ tombstones ป้องกันข้อความที่ยกเลิกกลับมา LINE แนะนำการดูแลข้อความที่ผู้ใช้ unsend ใน [receiving messages](https://developers.line.biz/en/docs/messaging-api/receiving-messages/#processing-on-receipt-of-unsend-event)
+
 1. สร้าง Messaging API channel ของ LINE Official Account นำ channel secret/access token ใส่ server environment
 2. เปิดอนุญาต bot เข้ากลุ่ม และตั้ง webhook URL `https://your-domain/api/webhooks/line` กด Verify (รองรับ events ว่าง)
 3. เปิด Use webhook และ webhook redelivery ถ้ามี ปิด auto-response ที่รบกวนตามการตั้งค่าบัญชีของคุณ

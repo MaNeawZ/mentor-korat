@@ -14,6 +14,7 @@ let mode = "edit",
   jobKind = "WAITING_EVIDENCE";
 let mentorAssigned = false,
   mentorDiscordId: string | null = null;
+let lineRetracted = false;
 const writes: {
   table: string;
   operation: string;
@@ -30,6 +31,7 @@ function query(table: string) {
             id: "leave-id",
             document_number: "LE-256911001234",
             status: leaveStatus,
+            line_retracted: lineRetracted,
             leave_date: "2026-11-14",
             leave_type: "ลาป่วย",
             reason: "ข้อมูลทดสอบ",
@@ -75,6 +77,7 @@ beforeEach(() => {
   mode = "edit";
   jobKind = "WAITING_EVIDENCE";
   mentorAssigned = false;
+  lineRetracted = false;
   mentorDiscordId = null;
   writes.length = 0;
   mocks.from.mockReset();
@@ -229,6 +232,38 @@ it("reuses the same active link on delivery retry", async () => {
     writes.filter((w) => w.table === "evidence_upload_tokens"),
   ).toHaveLength(0);
 });
+it.each(["LINE_UNSENT", "LINE_CORRECTED"])(
+  "notifies and tags the mentor for %s even when evidence status has not changed",
+  async (kind) => {
+    jobKind = kind;
+    lineRetracted = kind === "LINE_UNSENT";
+    mentorAssigned = true;
+    mentorDiscordId = "234567890123456789";
+    messageId = "original-card";
+    const token = newToken("s".repeat(40));
+    nonce = token.nonce;
+    const send = vi.fn<
+      (url: string, options: RequestInit) => Promise<Response>
+    >(async () => Response.json({ id: "original-card" }));
+    vi.stubGlobal("fetch", send);
+    expect(await runWorker()).toEqual({ processed: 1 });
+    expect(send).toHaveBeenCalledTimes(2);
+    const card = JSON.parse(send.mock.calls[0][1].body as string),
+      notice = JSON.parse(send.mock.calls[1][1].body as string);
+    expect(notice.allowed_mentions).toEqual({
+      parse: [],
+      users: ["234567890123456789"],
+    });
+    expect(notice.content).toContain(
+      kind === "LINE_UNSENT" ? "ยกเลิกข้อความ LINE" : "อัปเดตข้อมูลใบลา",
+    );
+    if (lineRetracted) {
+      expect(card.embeds[0].title).toContain("ถูกยกเลิก");
+      expect(JSON.stringify(card)).not.toContain("/upload/");
+      expect(JSON.stringify(card)).not.toContain("ข้อมูลทดสอบ");
+    } else expect(JSON.stringify(card)).toContain(`/upload/${token.token}`);
+  },
+);
 it.each([
   "WAITING_MENTOR_REVIEW",
   "WAITING_FINAL_REVIEW",
