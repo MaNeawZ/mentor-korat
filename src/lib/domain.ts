@@ -108,7 +108,11 @@ export const employeeSchema = z.object({
   code: z
     .string()
     .trim()
-    .regex(/^\d{3,12}$/),
+    .regex(
+      /^[A-Za-z0-9]{3,12}$/,
+      "รหัสพนักงานต้องเป็นตัวอักษรอังกฤษหรือตัวเลข 3–12 ตัว เช่น OLS768563",
+    )
+    .toUpperCase(),
   name: z.string().trim().min(2).max(160),
   department_id: z.uuid(),
   mentor_id: z.uuid().nullable(),

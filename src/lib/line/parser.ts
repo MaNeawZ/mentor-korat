@@ -37,7 +37,11 @@ export function parseLeave(
   text: string,
   types = ["ลาป่วย", "ลากิจ", "ลาพักร้อน", "ลาอื่น ๆ"],
 ) {
-  const employee = text.match(/^\s*(\d{3,12})\s+([^\n\r]+)/m);
+  const candidates = [
+    ...text.matchAll(/^\s*([A-Z0-9]{3,12})[^\S\r\n]+([^\n\r]+)/gim),
+  ];
+  const employee =
+    candidates.find((match) => /[0-9]/.test(match[1])) || candidates[0];
   const document = text
     .match(/(?:เลขที่ใบลา\s*[:：]?\s*)?(LE-\d{8,20})/i)?.[1]
     ?.toUpperCase();
@@ -54,7 +58,7 @@ export function parseLeave(
   if (!type) issues.push("UNKNOWN_LEAVE_TYPE");
   if (!reason) issues.push("MISSING_REASON");
   return {
-    employee_code: employee?.[1] || null,
+    employee_code: employee?.[1]?.toUpperCase() || null,
     employee_name: employee?.[2]?.trim() || null,
     document_number: document || null,
     leave_date: date,

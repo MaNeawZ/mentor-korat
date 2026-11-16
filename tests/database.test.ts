@@ -58,6 +58,65 @@ beforeAll(async () => {
 afterAll(async () => {
   await db?.close();
 });
+it("registers an alphanumeric employee through the management RPC and ingests their LINE leave without affecting numeric codes", async () => {
+  await admin();
+  await db.exec("BEGIN");
+  try {
+    await actor(head);
+    await db.query("SELECT mentor_korat.manage_entity('employee',$1::jsonb)", [
+      JSON.stringify({
+        code: "OLS768563",
+        name: "พนักงาน OLS",
+        department_id: department,
+        mentor_id: mentor,
+        active: true,
+      }),
+    ]);
+    await admin();
+    const t = newToken(secret);
+    await db.exec(
+      `INSERT INTO mentor_korat.integration_events(id,payload) VALUES('ols-event','{"source":{"groupId":"group"},"message":{"id":"ols-message","text":"original"}}')`,
+    );
+    await db.query("SELECT mentor_korat.ingest_leave($1,$2::jsonb,$3,$4)", [
+      "ols-event",
+      JSON.stringify({
+        employee_code: "OLS768563",
+        employee_name: "พนักงาน OLS",
+        document_number: "LE-256911009900",
+        leave_date: "2026-11-16",
+        leave_type: "ลาป่วย",
+        period: "AM",
+        reason: "พบแพทย์",
+        issues: [],
+      }),
+      t.hash,
+      t.nonce,
+    ]);
+    expect(
+      (
+        await db.query(
+          "SELECT e.code,l.status FROM mentor_korat.leave_requests l JOIN mentor_korat.employees e ON e.id=l.employee_id WHERE l.document_number='LE-256911009900'",
+        )
+      ).rows,
+    ).toEqual([{ code: "OLS768563", status: "WAITING_EVIDENCE" }]);
+    expect(
+      (
+        await db.query(
+          "SELECT code FROM mentor_korat.employees WHERE code='68364'",
+        )
+      ).rows,
+    ).toEqual([{ code: "68364" }]);
+    await expect(
+      db.query(
+        "INSERT INTO mentor_korat.employees(code,name,department_id) VALUES($1,$2,$3)",
+        ["OLS-123", "Invalid employee", department],
+      ),
+    ).rejects.toThrow(/employee_code_format/);
+  } finally {
+    await db.exec("ROLLBACK");
+    await admin();
+  }
+});
 describe("real PostgreSQL transaction and RLS integration (isolated PGlite)", () => {
   it("does not change existing public data", async () => {
     await admin();

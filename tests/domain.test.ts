@@ -12,6 +12,7 @@ import {
   assertTransition,
   defaultPermissions,
   reviewSchema,
+  employeeSchema,
   type Profile,
 } from "../src/lib/domain";
 import { discordPayload } from "../src/lib/discord";
@@ -24,6 +25,30 @@ const mentor: Profile = {
   permissions: [...defaultPermissions.MENTOR],
 };
 describe("deterministic LINE parser", () => {
+  it("does not mistake an English heading for the alphanumeric employee row", () => {
+    expect(
+      parseLeave(
+        "Leave Request\nOLS768563 พนักงาน ทดสอบ\nขออนุญาตลาป่วย\n16 พฤศจิกายน 2569\nเนื่องจากพบแพทย์\nLE-256911009900",
+      ),
+    ).toMatchObject({
+      employee_code: "OLS768563",
+      employee_name: "พนักงาน ทดสอบ",
+      issues: [],
+    });
+  });
+  it.each(["OLS768563", "ols768563", "68364"])(
+    "reads employee code %s consistently with employee registration",
+    (code) => {
+      const parsed = parseLeave(
+        `${code} พนักงาน ทดสอบ\nขออนุญาตลาป่วยช่วงเช้า\n16 พฤศจิกายน 2569\nเนื่องจากพบแพทย์\nเลขที่ใบลา: LE-256911009900`,
+      );
+      expect(parsed).toMatchObject({
+        employee_code: code.toUpperCase(),
+        employee_name: "พนักงาน ทดสอบ",
+        issues: [],
+      });
+    },
+  );
   it.each([
     ["13 พฤศจิกายน 2568", "2025-11-13"],
     ["29 กุมภาพันธ์ 2567", "2024-02-29"],
@@ -62,6 +87,27 @@ describe("deterministic LINE parser", () => {
         ["ลาอบรม"],
       )?.leave_type,
     ).toBe("ลาอบรม"));
+});
+describe("employee code validation", () => {
+  const employee = {
+    name: "พนักงาน ทดสอบ",
+    department_id: "11111111-1111-4111-8111-111111111111",
+    mentor_id: null,
+  };
+  it.each(["OLS768563", "ols768563", "68364"])(
+    "accepts and normalizes %s",
+    (code) =>
+      expect(employeeSchema.parse({ ...employee, code }).code).toBe(
+        code.toUpperCase(),
+      ),
+  );
+  it.each(["OL S768563", "OLS-768563", "กข123", "ß123", "A1", "ABCDEFGHIJKLM"])(
+    "rejects unsupported code %s",
+    (code) =>
+      expect(employeeSchema.safeParse({ ...employee, code }).success).toBe(
+        false,
+      ),
+  );
 });
 describe("security primitives", () => {
   it("verifies raw-body HMAC and rejects changed bodies and invalid lengths", () => {

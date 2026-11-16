@@ -300,7 +300,7 @@ describe("HTTP trust boundaries", () => {
 });
 describe("migration guard", () => {
   it("checks all reviewed checksums", () =>
-    expect(reviewedMigrations()).toHaveLength(8));
+    expect(reviewedMigrations()).toHaveLength(9));
   it.each([
     "ALTER TABLE public.live ADD COLUMN bad text;",
     "DROP SCHEMA public CASCADE;",
@@ -308,9 +308,19 @@ describe("migration guard", () => {
     "ALTER SYSTEM SET x=1;",
     "CREATE SCHEMA evil;",
     "UPDATE storage.objects SET name='x';",
+    "ALTER TABLE mentor_korat.employees DROP CONSTRAINT employee_code_format;",
+    "ALTER TABLE mentor_korat.employees DROP CONSTRAINT employee_name_length;",
   ])("rejects prohibited SQL %s", (sql) =>
     expect(() => validateSql(sql)).toThrow(),
   );
+  it("allows only the complete reviewed employee-code constraint replacement", () => {
+    const statement =
+      "ALTER TABLE mentor_korat.employees DROP CONSTRAINT employee_code_format, ADD CONSTRAINT employee_code_format CHECK(code ~ '^[A-Z0-9]{3,12}$');";
+    expect(() => validateSql(statement)).not.toThrow();
+    expect(() =>
+      validateSql(statement + " DROP TABLE mentor_korat.employees;"),
+    ).toThrow();
+  });
   it("validates identifiers used by route validation", () =>
     expect(z.uuid().safeParse("bad").success).toBe(false));
 });

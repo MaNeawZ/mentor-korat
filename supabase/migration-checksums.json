@@ -6,5 +6,6 @@
   "202611140002_clear_data_safeupdate.sql": "626baa8863ed42de2c5768441a8df550ebb5f042f2d4aebc9a9113dcdf7424be",
   "202611140003_clear_audit_history.sql": "548000073d892eb26cd7b51afc36b706b6210a3dcea6ba9153a57be35331e013",
   "202611140004_discord_evidence.sql": "84c3ea580136716f74e1521398be8ff5516b389eb5f2c1040f6bec8b05118f35",
-  "202611150001_line_unsend_corrections.sql": "78966add80543daa0f94b2e66178c6fb92a53fbeb77bd5eedf6019e3d18ee136"
+  "202611150001_line_unsend_corrections.sql": "78966add80543daa0f94b2e66178c6fb92a53fbeb77bd5eedf6019e3d18ee136",
+  "202611160001_alphanumeric_employee_codes.sql": "5cb3492467376142942f96d1d3202b2c4385c1eebd22ab06a57decce862e2f0a"
 }

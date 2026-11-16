@@ -10,9 +10,17 @@ export function checksum(sql) {
 }
 export function validateSql(sql) {
   // All files must additionally match a reviewed SHA256. This deliberately fails closed.
+  // Allow only this complete, atomic replacement of our own format constraint.
+  // Removing a constraint alone, or any other DROP operation, remains forbidden.
+  const scopedSql = sql
+    .replace(/\s+/g, " ")
+    .replace(
+      "ALTER TABLE mentor_korat.employees DROP CONSTRAINT employee_code_format, ADD CONSTRAINT employee_code_format CHECK(code ~ '^[A-Z0-9]{3,12}$');",
+      "",
+    );
   if (
     /\bpublic\s*\.|\b(?:DROP|TRUNCATE|RESET)\b|\bALTER\s+(?:DATABASE|ROLE|SYSTEM|PUBLICATION)\b|\bCOPY\b|\b(?:CREATE|ALTER)\s+SCHEMA\s+(?!IF\s+NOT\s+EXISTS\s+mentor_korat\b|mentor_korat\b)/i.test(
-      sql,
+      scopedSql,
     )
   )
     throw new Error("Migration violates schema isolation");

@@ -33,7 +33,12 @@ export function EmployeeManager({
     [message, setMessage] = useState("");
   const router = useRouter();
   const fields: Field[] = [
-    { key: "code", label: "รหัสพนักงาน", required: true },
+    {
+      key: "code",
+      label: "รหัสพนักงาน",
+      required: true,
+      help: "ตัวอักษรอังกฤษหรือตัวเลข 3–12 ตัว เช่น 68364 หรือ OLS768563",
+    },
     { key: "name", label: "ชื่อ–นามสกุล", required: true },
     {
       key: "department_id",

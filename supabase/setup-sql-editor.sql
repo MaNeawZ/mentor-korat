@@ -816,6 +816,24 @@ $mk_source$;
 END
 $mk_migration$;
 
+
+DO $mk_migration$
+BEGIN
+  IF EXISTS (SELECT 1 FROM mentor_korat.schema_migrations WHERE version='202611160001_alphanumeric_employee_codes.sql') THEN
+    IF NOT EXISTS (SELECT 1 FROM mentor_korat.schema_migrations WHERE version='202611160001_alphanumeric_employee_codes.sql' AND checksum='5cb3492467376142942f96d1d3202b2c4385c1eebd22ab06a57decce862e2f0a') THEN
+      RAISE EXCEPTION 'Applied migration checksum mismatch: 202611160001_alphanumeric_employee_codes.sql';
+    END IF;
+  ELSE
+    EXECUTE $mk_source$
+ALTER TABLE mentor_korat.employees DROP CONSTRAINT employee_code_format,
+ ADD CONSTRAINT employee_code_format CHECK(code ~ '^[A-Z0-9]{3,12}$');
+
+$mk_source$;
+    INSERT INTO mentor_korat.schema_migrations(version,checksum) VALUES ('202611160001_alphanumeric_employee_codes.sql','5cb3492467376142942f96d1d3202b2c4385c1eebd22ab06a57decce862e2f0a');
+  END IF;
+END
+$mk_migration$;
+
 REVOKE ALL ON mentor_korat.schema_migrations FROM PUBLIC,anon,authenticated;
 COMMIT;
 SELECT version, applied_at FROM mentor_korat.schema_migrations ORDER BY version;
