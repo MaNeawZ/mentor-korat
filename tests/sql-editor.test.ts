@@ -28,7 +28,7 @@ it("exports current reviewed SQL, applies atomically, and reruns without changin
         "SELECT count(*)::int n FROM mentor_korat.schema_migrations",
       )
     ).rows,
-  ).toEqual([{ n: 9 }]);
+  ).toEqual([{ n: 10 }]);
   expect(
     (
       await db.query(

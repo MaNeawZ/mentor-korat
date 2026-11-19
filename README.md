@@ -140,6 +140,14 @@ npm.cmd audit --omit=dev
 
 รหัสพนักงานใช้ได้ทั้งตัวเลขและตัวอักษรอังกฤษ 3–12 ตัว เช่น `OLS768563` ระบบจัดเป็นตัวพิมพ์ใหญ่ก่อนบันทึกและก่อนจับคู่ข้อความ LINE ต้องติดตั้ง migration `202611160001_alphanumeric_employee_codes.sql` เพิ่มเมื่ออัปเดตจากรุ่นที่รับเฉพาะตัวเลข
 
+## นำเข้าพนักงาน CSV
+
+หน้า **พนักงาน → นำเข้าพนักงาน CSV** เลือกแผนก อัปโหลด CSV แบบ UTF-8 แล้วตรวจตัวอย่างก่อนยืนยัน รองรับไฟล์ `app_employees_rows.csv` โดยใช้ `id` เป็นรหัส รวม `first_name` กับ `last_name` เป็นชื่อ และแปลง `status=resigned` หรือ `inactive` เป็นปิดใช้งาน หรือใช้หัวตาราง `code,name,active` ได้ (สถานะว่างถือว่าใช้งาน) นำเข้าได้สูงสุด 2 MB / 2,000 คนต่อครั้ง
+
+ผู้ใช้ต้องมีสิทธิ์ `employees.manage` รหัสซ้ำในไฟล์หรือข้อมูลผิดจะหยุดก่อนบันทึก รหัสที่มีในระบบแล้วจะถูกข้ามโดยไม่แก้ข้อมูลเดิม แผนกที่เลือกใช้กับพนักงานใหม่ทุกคนและยังไม่มอบหมาย Mentor คอลัมน์ตำแหน่ง ชื่อเล่น และวันที่จะไม่ถูกบันทึก การบันทึกทั้งหมดเป็น transaction เดียวพร้อม audit log และรายงานจำนวนเพิ่ม/ข้ามหลังสำเร็จ
+
+ติดตั้ง migration `202611190001_import_employees.sql` ก่อนใช้ หรือรัน `supabase/setup-sql-editor.sql` ฉบับล่าสุดตาม [DEPLOYMENT.md](DEPLOYMENT.md)
+
 ## External scheduler
 
 ไม่มี cron ใน Vercel config แล้ว เมื่อรับข้อความ LINE จะบันทึก event อย่างทนทาน จากนั้นอ่านข้อมูลและเรียก transaction สร้างใบลา/แจ้งเตือนเว็บ/Discord outbox ก่อนตอบ LINE (fast path ไม่เกิน 5 events และมี budget 1.5 วินาที ไม่ใช่ latency ที่รับประกัน) Discord ส่งต่อทันทีหลัง response ผ่าน Next.js after() งานที่ช้าหรือขัดข้องยังอยู่ในคิวและมี GitHub schedule เป็น fallback: ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) รอบ fallback ทุก 5 นาทีเปิดเป็นค่าเริ่มต้น ไม่ต้องกด Re-run; push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบ ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=false` เมื่อต้องการหยุด fallback GitHub schedule อาจล่าช้าได้ รายละเอียดอยู่ใน DEPLOYMENT.md

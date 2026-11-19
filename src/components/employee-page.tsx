@@ -5,6 +5,7 @@ import { sessionClient } from "@/lib/supabase/server";
 import { check } from "@/lib/api";
 import { referenceData, type Filters } from "@/lib/repository";
 import { EmployeeManager } from "./employee-manager";
+import { EmployeeImport } from "./employee-import";
 import { EntityForm } from "./entity-form";
 import { PageHeader } from "./page-header";
 import { SearchInput } from "./search";
@@ -40,6 +41,9 @@ export async function EmployeePage({
         title={unassigned ? "พนักงานรอมอบหมาย Mentor" : "พนักงาน"}
         description="จัดการข้อมูลทีม และเชื่อมต่อพนักงานกับ Mentor ผู้รับผิดชอบ"
       >
+        {can(user, "employees.manage") && (
+          <EmployeeImport departments={refs.departments} />
+        )}
         {can(user, "employees.manage") && (
           <EntityForm
             title="เพิ่มแผนก"

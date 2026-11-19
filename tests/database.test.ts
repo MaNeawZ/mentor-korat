@@ -117,6 +117,71 @@ it("registers an alphanumeric employee through the management RPC and ingests th
     await admin();
   }
 });
+it("imports atomically, preserves existing employees and checks database permissions", async () => {
+  await actor(head);
+  const rows = [
+    { code: "CSV123", name: "CSV employee", active: true },
+    { code: "68364", name: "Must not overwrite", active: false },
+  ];
+  const before = (
+    await db.query(
+      "SELECT name,mentor_id,active FROM mentor_korat.employees WHERE code='68364'",
+    )
+  ).rows;
+  const result = await db.query<{ result: { added: number; skipped: number } }>(
+    "SELECT mentor_korat.import_employees($1,$2::jsonb) result",
+    [department, JSON.stringify(rows)],
+  );
+  expect(result.rows[0].result).toEqual({ added: 1, skipped: 1 });
+  expect(
+    (
+      await db.query(
+        "SELECT name,mentor_id,active FROM mentor_korat.employees WHERE code='68364'",
+      )
+    ).rows,
+  ).toEqual(before);
+  expect(
+    (
+      await db.query(
+        "SELECT mentor_id FROM mentor_korat.employees WHERE code='CSV123'",
+      )
+    ).rows,
+  ).toEqual([{ mentor_id: null }]);
+  expect(
+    (
+      await db.query(
+        "SELECT action FROM mentor_korat.audit_logs WHERE new_data->>'code'='CSV123'",
+      )
+    ).rows,
+  ).toEqual([{ action: "MANAGE_employee" }]);
+  await expect(
+    db.query("SELECT mentor_korat.import_employees($1,$2::jsonb)", [
+      department,
+      JSON.stringify([
+        { code: "CSV999", name: "Rollback", active: true },
+        { code: "BAD!", name: "Bad", active: true },
+      ]),
+    ]),
+  ).rejects.toThrow(/INVALID_EMPLOYEE/);
+  expect(
+    (
+      await db.query(
+        "SELECT id FROM mentor_korat.employees WHERE code='CSV999'",
+      )
+    ).rows,
+  ).toEqual([]);
+  await actor(mentor);
+  await expect(
+    db.query("SELECT mentor_korat.import_employees($1,$2::jsonb)", [
+      department,
+      JSON.stringify(rows),
+    ]),
+  ).rejects.toThrow(/FORBIDDEN/);
+  await admin();
+  await db.exec(
+    "DELETE FROM mentor_korat.audit_logs WHERE new_data->>'code'='CSV123'; DELETE FROM mentor_korat.employees WHERE code='CSV123'",
+  );
+});
 describe("real PostgreSQL transaction and RLS integration (isolated PGlite)", () => {
   it("does not change existing public data", async () => {
     await admin();
