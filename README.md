@@ -148,6 +148,12 @@ npm.cmd audit --omit=dev
 
 ติดตั้ง migration `202611190001_import_employees.sql` ก่อนใช้ หรือรัน `supabase/setup-sql-editor.sql` ฉบับล่าสุดตาม [DEPLOYMENT.md](DEPLOYMENT.md)
 
+## ลบพนักงาน
+
+ผู้มีสิทธิ์ `employees.manage` ใช้ปุ่ม **ลบ** ในแต่ละแถว หรือเลือกหลายคนด้วยช่องทำเครื่องหมายแล้วกด **ลบพนักงานที่เลือก** เลือกทั้งหมดได้เฉพาะหน้าปัจจุบัน หน้ายืนยันแสดงรหัสและชื่อก่อนลบถาวร หากมีพนักงานที่มีประวัติใบลาในชุดที่เลือก ระบบจะไม่ลบทั้งชุด ให้เอาคนนั้นออกจากรายการที่เลือก หรือปิดใช้งานผ่าน **แก้ไข** การลบเก็บข้อมูลเดิมใน audit log
+
+ติดตั้ง migration `202611190002_delete_employees.sql` หรือ SQL Editor bundle ฉบับล่าสุดก่อนใช้
+
 ## External scheduler
 
 ไม่มี cron ใน Vercel config แล้ว เมื่อรับข้อความ LINE จะบันทึก event อย่างทนทาน จากนั้นอ่านข้อมูลและเรียก transaction สร้างใบลา/แจ้งเตือนเว็บ/Discord outbox ก่อนตอบ LINE (fast path ไม่เกิน 5 events และมี budget 1.5 วินาที ไม่ใช่ latency ที่รับประกัน) Discord ส่งต่อทันทีหลัง response ผ่าน Next.js after() งานที่ช้าหรือขัดข้องยังอยู่ในคิวและมี GitHub schedule เป็น fallback: ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) รอบ fallback ทุก 5 นาทีเปิดเป็นค่าเริ่มต้น ไม่ต้องกด Re-run; push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบ ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=false` เมื่อต้องการหยุด fallback GitHub schedule อาจล่าช้าได้ รายละเอียดอยู่ใน DEPLOYMENT.md

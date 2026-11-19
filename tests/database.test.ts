@@ -182,6 +182,85 @@ it("imports atomically, preserves existing employees and checks database permiss
     "DELETE FROM mentor_korat.audit_logs WHERE new_data->>'code'='CSV123'; DELETE FROM mentor_korat.employees WHERE code='CSV123'",
   );
 });
+it("deletes selected employees atomically, preserves leave history and audits deletions", async () => {
+  await actor(head);
+  const first = "77777777-7777-4777-8777-777777777777";
+  const second = "88888888-8888-4888-8888-888888888888";
+  await db.query("SELECT mentor_korat.manage_entity('employee',$1::jsonb)", [
+    JSON.stringify({
+      id: first,
+      code: "DEL111",
+      name: "Delete one",
+      department_id: department,
+      mentor_id: null,
+      active: true,
+    }),
+  ]);
+  await db.query("SELECT mentor_korat.manage_entity('employee',$1::jsonb)", [
+    JSON.stringify({
+      id: second,
+      code: "DEL222",
+      name: "Delete two",
+      department_id: department,
+      mentor_id: mentor,
+      active: false,
+    }),
+  ]);
+  const remove = (ids: string[]) =>
+    db.query<{ result: { deleted: number } }>(
+      "SELECT mentor_korat.delete_employees($1::uuid[]) result",
+      [ids],
+    );
+  await expect(remove([first, employee])).rejects.toThrow(
+    /EMPLOYEE_HAS_LEAVES/,
+  );
+  expect(
+    (
+      await db.query("SELECT id FROM mentor_korat.employees WHERE id=$1", [
+        first,
+      ])
+    ).rows,
+  ).toHaveLength(1);
+  expect(
+    (
+      await db.query(
+        "SELECT id FROM mentor_korat.leave_requests WHERE employee_id=$1",
+        [employee],
+      )
+    ).rows,
+  ).toHaveLength(1);
+  await expect(remove([])).rejects.toThrow(/INVALID_EMPLOYEES/);
+  await expect(
+    remove([first, "99999999-9999-4999-8999-999999999999"]),
+  ).rejects.toThrow(/VERSION_CONFLICT/);
+  await actor(mentor);
+  await expect(remove([first, second])).rejects.toThrow(/FORBIDDEN/);
+  await actor(head);
+  expect((await remove([first, first, second])).rows[0].result).toEqual({
+    deleted: 2,
+  });
+  expect(
+    (
+      await db.query(
+        "SELECT id FROM mentor_korat.employees WHERE id=ANY($1::uuid[])",
+        [[first, second]],
+      )
+    ).rows,
+  ).toEqual([]);
+  expect(
+    (
+      await db.query(
+        "SELECT old_data->>'code' code FROM mentor_korat.audit_logs WHERE action='DELETE_employee' AND entity_id=ANY($1::uuid[]) ORDER BY old_data->>'code'",
+        [[first, second]],
+      )
+    ).rows,
+  ).toEqual([{ code: "DEL111" }, { code: "DEL222" }]);
+  await admin();
+  await db.query(
+    "DELETE FROM mentor_korat.audit_logs WHERE entity_id=ANY($1::uuid[])",
+    [[first, second]],
+  );
+});
 describe("real PostgreSQL transaction and RLS integration (isolated PGlite)", () => {
   it("does not change existing public data", async () => {
     await admin();

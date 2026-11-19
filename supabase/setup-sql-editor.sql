@@ -879,6 +879,49 @@ $mk_source$;
 END
 $mk_migration$;
 
+
+DO $mk_migration$
+BEGIN
+  IF EXISTS (SELECT 1 FROM mentor_korat.schema_migrations WHERE version='202611190002_delete_employees.sql') THEN
+    IF NOT EXISTS (SELECT 1 FROM mentor_korat.schema_migrations WHERE version='202611190002_delete_employees.sql' AND checksum='0ddc926fa0368fa9b70a9f7aa672cdc6648c6fa4a0f57feb7efca742faa92143') THEN
+      RAISE EXCEPTION 'Applied migration checksum mismatch: 202611190002_delete_employees.sql';
+    END IF;
+  ELSE
+    EXECUTE $mk_source$
+-- Preserve leave history. A selected batch either deletes completely or fails.
+CREATE FUNCTION mentor_korat.delete_employees(employee_ids uuid[])
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE employee mentor_korat.employees; ids uuid[]; expected integer; locked integer:=0; blocked_codes text;
+BEGIN
+ IF NOT mentor_korat.has_permission('employees.manage') THEN RAISE EXCEPTION 'FORBIDDEN'; END IF;
+ IF coalesce(cardinality(employee_ids),0) NOT BETWEEN 1 AND 200 THEN RAISE EXCEPTION 'INVALID_EMPLOYEES'; END IF;
+ IF array_position(employee_ids,NULL) IS NOT NULL THEN RAISE EXCEPTION 'INVALID_EMPLOYEES'; END IF;
+ SELECT array_agg(DISTINCT id) INTO ids FROM unnest(employee_ids) AS id;
+ expected:=cardinality(ids);
+ -- Stable ordering avoids deadlocks between overlapping batches. FOR UPDATE also
+ -- serializes FK checks from concurrent leave creation with the deletion.
+ FOR employee IN SELECT e.* FROM mentor_korat.employees e WHERE e.id=ANY(ids) ORDER BY e.id FOR UPDATE LOOP
+   locked:=locked+1;
+ END LOOP;
+ IF locked<>expected THEN RAISE EXCEPTION 'VERSION_CONFLICT'; END IF;
+ SELECT string_agg(e.code,', ' ORDER BY e.code) INTO blocked_codes FROM mentor_korat.employees e
+   WHERE e.id=ANY(ids) AND EXISTS(SELECT 1 FROM mentor_korat.leave_requests l WHERE l.employee_id=e.id);
+ IF blocked_codes IS NOT NULL THEN RAISE EXCEPTION 'EMPLOYEE_HAS_LEAVES:%',blocked_codes; END IF;
+ FOR employee IN SELECT e.* FROM mentor_korat.employees e WHERE e.id=ANY(ids) ORDER BY e.id LOOP
+   DELETE FROM mentor_korat.employees e WHERE e.id=employee.id;
+   PERFORM mentor_korat.audit(auth.uid(),employee.id,'DELETE_employee',to_jsonb(employee),NULL);
+ END LOOP;
+ RETURN jsonb_build_object('deleted',expected);
+END $$;
+REVOKE ALL ON FUNCTION mentor_korat.delete_employees(uuid[]) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION mentor_korat.delete_employees(uuid[]) TO authenticated;
+
+$mk_source$;
+    INSERT INTO mentor_korat.schema_migrations(version,checksum) VALUES ('202611190002_delete_employees.sql','0ddc926fa0368fa9b70a9f7aa672cdc6648c6fa4a0f57feb7efca742faa92143');
+  END IF;
+END
+$mk_migration$;
+
 REVOKE ALL ON mentor_korat.schema_migrations FROM PUBLIC,anon,authenticated;
 COMMIT;
 SELECT version, applied_at FROM mentor_korat.schema_migrations ORDER BY version;

@@ -31,6 +31,11 @@ export function EmployeeManager({
     [open, setOpen] = useState(false),
     [pending, setPending] = useState(false),
     [message, setMessage] = useState("");
+  const [deleteIds, setDeleteIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleted, setDeleted] = useState<string[]>([]);
+  const visibleEmployees = employees.filter((e) => !deleted.includes(e.id));
   const router = useRouter();
   const fields: Field[] = [
     {
@@ -86,6 +91,18 @@ export function EmployeeManager({
             มอบหมาย Mentor ({selected.length})
           </Button>
         )}
+        {manage && (
+          <Button
+            variant="destructive"
+            disabled={!selected.length}
+            onClick={() => {
+              setDeleteError("");
+              setDeleteIds([...selected]);
+            }}
+          >
+            ลบพนักงานที่เลือก ({selected.length})
+          </Button>
+        )}
         {message && (
           <span role="status" className="muted">
             {message}
@@ -96,18 +113,20 @@ export function EmployeeManager({
         <table>
           <thead>
             <tr>
-              {assign && (
+              {(assign || manage) && (
                 <th>
                   <input
                     aria-label="เลือกทั้งหมดในหน้านี้"
                     type="checkbox"
                     checked={
-                      employees.length > 0 &&
-                      selected.length === employees.length
+                      visibleEmployees.length > 0 &&
+                      visibleEmployees.every((e) => selected.includes(e.id))
                     }
                     onChange={(e) =>
                       setSelected(
-                        e.target.checked ? employees.map((x) => x.id) : [],
+                        e.target.checked
+                          ? visibleEmployees.map((x) => x.id)
+                          : [],
                       )
                     }
                   />
@@ -122,9 +141,9 @@ export function EmployeeManager({
             </tr>
           </thead>
           <tbody>
-            {employees.map((e) => (
+            {visibleEmployees.map((e) => (
               <tr key={e.id}>
-                {assign && (
+                {(assign || manage) && (
                   <td>
                     <input
                       aria-label={`เลือก ${e.name}`}
@@ -159,27 +178,107 @@ export function EmployeeManager({
                 </td>
                 {manage && (
                   <td>
-                    <EntityForm
-                      key={`${e.id}-${e.mentor_id}-${e.active}-${e.name}`}
-                      title="แก้ไขข้อมูลพนักงาน"
-                      trigger="แก้ไข"
-                      endpoint="/api/manage/employee"
-                      fields={fields}
-                      initial={e}
-                    />
+                    <div className="row wrap">
+                      <EntityForm
+                        key={`${e.id}-${e.mentor_id}-${e.active}-${e.name}`}
+                        title="แก้ไขข้อมูลพนักงาน"
+                        trigger="แก้ไข"
+                        endpoint="/api/manage/employee"
+                        fields={fields}
+                        initial={e}
+                      />
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeleteIds([e.id]);
+                        }}
+                      >
+                        ลบ
+                      </Button>
+                    </div>
                   </td>
                 )}
               </tr>
             ))}
           </tbody>
         </table>
-        {!employees.length && (
+        {!visibleEmployees.length && (
           <div className="empty-state">
             <h3>ยังไม่มีพนักงานในรายการนี้</h3>
             <p>เพิ่มแผนกและพนักงานเพื่อเริ่มต้นใช้งาน</p>
           </div>
         )}
       </div>
+      <Modal
+        open={deleteIds.length > 0}
+        onOpenChange={(value) => {
+          if (!value && !deleting) setDeleteIds([]);
+        }}
+        title={`ยืนยันลบพนักงาน ${deleteIds.length} คน`}
+        description="การลบไม่สามารถย้อนกลับได้ หากมีพนักงานที่มีประวัติใบลา ระบบจะไม่ลบทั้งชุด กรุณาเอาคนนั้นออกจากรายการที่เลือก หรือปิดใช้งานผ่านปุ่มแก้ไข"
+      >
+        <form
+          className="form-stack"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (deleting || !deleteIds.length) return;
+            setDeleting(true);
+            setDeleteError("");
+            try {
+              const response = await fetch("/api/manage/employees-delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ employee_ids: deleteIds }),
+              });
+              const result = await response.json();
+              if (!response.ok) {
+                setDeleteError(result.error || "ไม่สามารถลบพนักงานได้");
+                return;
+              }
+              setDeleted((previous) => [...previous, ...deleteIds]);
+              setSelected((previous) =>
+                previous.filter((id) => !deleteIds.includes(id)),
+              );
+              setMessage(`ลบพนักงานเรียบร้อย ${result.deleted} คน`);
+              setDeleteIds([]);
+              router.refresh();
+            } catch {
+              setDeleteError("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่");
+            } finally {
+              setDeleting(false);
+            }
+          }}
+        >
+          <ul>
+            {employees
+              .filter((e) => deleteIds.includes(e.id))
+              .map((e) => (
+                <li key={e.id}>
+                  {e.code} — {e.name}
+                </li>
+              ))}
+          </ul>
+          {deleteError && (
+            <p className="error-box" role="alert">
+              {deleteError}
+            </p>
+          )}
+          <div className="row end">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => setDeleteIds([])}
+            >
+              ยกเลิก
+            </Button>
+            <Button variant="destructive" disabled={deleting}>
+              {deleting ? "กำลังลบ…" : `ยืนยันลบ ${deleteIds.length} คน`}
+            </Button>
+          </div>
+        </form>
+      </Modal>
       <Modal
         open={open}
         onOpenChange={setOpen}
