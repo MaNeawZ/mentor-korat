@@ -7,5 +7,18 @@ export default async function Workspace({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
-  return <Shell user={user}>{children}</Shell>;
+  const now = new Date();
+  const dateLabel = new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "long",
+    timeZone: "Asia/Bangkok",
+  }).format(now);
+  const year = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  }).format(now);
+  return (
+    <Shell user={user} dateLabel={dateLabel} year={year}>
+      {children}
+    </Shell>
+  );
 }

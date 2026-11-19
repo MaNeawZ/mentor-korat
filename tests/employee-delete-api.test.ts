@@ -58,3 +58,13 @@ it("rejects oversized request bodies", async () => {
   expect((await POST(request({ extra: "x".repeat(17000) }))).status).toBe(413);
   expect(m.rpc).not.toHaveBeenCalled();
 });
+it("identifies a missing database migration instead of returning a generic save error", async () => {
+  m.rpc.mockResolvedValue({
+    error: { code: "PGRST202", message: "Missing function" },
+  });
+  const response = await POST(request());
+  expect(response.status).toBe(503);
+  expect((await response.json()).error).toContain(
+    "EMPLOYEE_DELETE_NOT_INSTALLED",
+  );
+});

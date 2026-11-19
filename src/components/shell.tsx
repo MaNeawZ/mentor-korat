@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -12,9 +11,6 @@ import {
   Settings,
   ScrollText,
   Menu,
-  Sun,
-  Moon,
-  Monitor,
   LogOut,
   ChevronRight,
   Sprout,
@@ -22,6 +18,7 @@ import {
   UserRoundCheck,
 } from "lucide-react";
 import { NotificationBell } from "./live";
+import { ThemeToggle } from "./theme-toggle";
 import { can, type Profile, type Permission } from "@/lib/domain";
 const nav: {
   href: string;
@@ -61,14 +58,17 @@ const nav: {
 ];
 export function Shell({
   user,
+  dateLabel,
+  year,
   children,
 }: {
   user: Profile;
+  dateLabel: string;
+  year: string;
   children: React.ReactNode;
 }) {
   const path = usePathname(),
-    router = useRouter(),
-    { theme, setTheme } = useTheme();
+    router = useRouter();
   const [menu, setMenu] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
@@ -186,33 +186,8 @@ export function Shell({
             </span>
           </div>
           <div className="row">
-            <span className="top-date">
-              {new Intl.DateTimeFormat("th-TH", {
-                dateStyle: "long",
-                timeZone: "Asia/Bangkok",
-              }).format(new Date())}
-            </span>
-            <button
-              className="icon-btn"
-              aria-label={`เปลี่ยนธีม ปัจจุบัน ${theme}`}
-              onClick={() =>
-                setTheme(
-                  theme === "light"
-                    ? "dark"
-                    : theme === "dark"
-                      ? "system"
-                      : "light",
-                )
-              }
-            >
-              {theme === "dark" ? (
-                <Moon size={19} />
-              ) : theme === "light" ? (
-                <Sun size={19} />
-              ) : (
-                <Monitor size={19} />
-              )}
-            </button>
+            <span className="top-date">{dateLabel}</span>
+            <ThemeToggle />
             <NotificationBell />
             <span className="avatar small">{user.name.slice(0, 1)}</span>
           </div>
@@ -220,7 +195,7 @@ export function Shell({
         <main className="main-content">
           {children}
           <footer>
-            © {new Date().getFullYear()} Korat Leave Monitoring{" "}
+            © {year} Korat Leave Monitoring{" "}
             <span>ตรวจสอบหลักฐาน · ดูแลทีมอย่างเข้าใจ</span>
           </footer>
         </main>

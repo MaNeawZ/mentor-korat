@@ -22,6 +22,11 @@ export async function POST(request: Request) {
     const result = await db.rpc("delete_employees", {
       employee_ids: [...new Set(payload.employee_ids)],
     });
+    if (result.error?.code === "PGRST202")
+      throw new HttpError(
+        503,
+        "ยังไม่ได้ติดตั้งฟังก์ชันลบพนักงาน กรุณารัน migration 202611190002_delete_employees.sql ใน Supabase SQL Editor แล้วลองใหม่ (EMPLOYEE_DELETE_NOT_INSTALLED)",
+      );
     if (
       result.error &&
       /EMPLOYEE_HAS_LEAVES|foreign key constraint/.test(result.error.message)
