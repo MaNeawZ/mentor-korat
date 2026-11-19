@@ -23,6 +23,8 @@ export function EmployeeImport({
   const [reading, setReading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const csvDepartments =
+    rows.length > 0 && rows.every((row) => row.department_name);
   return (
     <>
       <Button
@@ -48,18 +50,24 @@ export function EmployeeImport({
           if (!pending && !reading) setOpen(value);
         }}
         title="นำเข้าพนักงานจาก CSV"
-        description="เลือกแผนกสำหรับพนักงานในไฟล์ รหัสที่มีอยู่แล้วจะถูกข้าม พนักงานใหม่จะยังไม่มี Mentor"
+        description="ใช้ position_name หรือ position ใน CSV เป็นแผนก สร้างแผนกใหม่ให้อัตโนมัติเมื่อยังไม่มี รหัสที่มีอยู่แล้วจะถูกข้าม"
       >
         <form
           className="form-stack"
           onSubmit={async (event) => {
             event.preventDefault();
-            if (!rows.length || !department || pending || reading) return;
+            if (
+              !rows.length ||
+              (!csvDepartments && !department) ||
+              pending ||
+              reading
+            )
+              return;
             setPending(true);
             setError("");
             try {
               const response = await fetch(
-                `/api/manage/employees-import?department_id=${encodeURIComponent(department)}`,
+                `/api/manage/employees-import${csvDepartments ? "" : `?department_id=${encodeURIComponent(department)}`}`,
                 {
                   method: "POST",
                   headers: { "Content-Type": "text/csv; charset=utf-8" },
@@ -85,23 +93,29 @@ export function EmployeeImport({
             }
           }}
         >
-          <label>
-            แผนกสำหรับพนักงานที่นำเข้า
-            <select
-              required
-              value={department}
-              disabled={pending}
-              onChange={(e) => setDepartment(e.target.value)}
-            >
-              <option value="">เลือกแผนก</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {!departments.length && <p role="alert">กรุณาเพิ่มแผนกก่อนนำเข้าพนักงาน</p>}
+          {rows.length > 0 && !csvDepartments && (
+            <label>
+              แผนกสำหรับไฟล์ที่ไม่มีคอลัมน์ position_name/position
+              <select
+                required
+                value={department}
+                disabled={pending}
+                onChange={(e) => setDepartment(e.target.value)}
+              >
+                <option value="">เลือกแผนก</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {rows.length > 0 && !csvDepartments && !departments.length && (
+            <p role="alert">
+              กรุณาเพิ่มแผนกก่อนนำเข้าไฟล์ที่ไม่มี position_name/position
+            </p>
+          )}
           <label>
             ไฟล์ CSV (UTF-8 สูงสุด 2 MB / 2,000 คน)
             <input
@@ -137,12 +151,14 @@ export function EmployeeImport({
               }}
             />
             <small>
-              รองรับ code,name,active หรือ id,first_name,last_name,status ตามไฟล์
+              รองรับ code,name,position,active หรือ
+              id,first_name,last_name,position_name,status ตามไฟล์
               app_employees_rows.csv
             </small>
           </label>
           <p className="muted">
-            นำเข้าเฉพาะรหัส ชื่อ–นามสกุล และสถานะ คอลัมน์ตำแหน่ง ชื่อเล่น และวันที่จะไม่ถูกบันทึก
+            ใช้ตำแหน่งใน CSV เป็นแผนกของแต่ละคน พนักงานใหม่ยังไม่มี Mentor
+            ส่วนชื่อเล่นและวันที่จะไม่ถูกบันทึก
           </p>
           {rows.length > 0 && (
             <>
@@ -156,6 +172,7 @@ export function EmployeeImport({
                     <tr>
                       <th>รหัส</th>
                       <th>ชื่อ–นามสกุล</th>
+                      <th>แผนก</th>
                       <th>สถานะ</th>
                     </tr>
                   </thead>
@@ -164,6 +181,12 @@ export function EmployeeImport({
                       <tr key={row.code}>
                         <td className="mono">{row.code}</td>
                         <td>{row.name}</td>
+                        <td>
+                          {row.department_name ||
+                            departments.find((d) => d.id === department)
+                              ?.name ||
+                            "เลือกแผนก"}
+                        </td>
                         <td>{row.active ? "ใช้งาน" : "ปิดใช้งาน"}</td>
                       </tr>
                     ))}
@@ -187,7 +210,12 @@ export function EmployeeImport({
               ยกเลิก
             </Button>
             <Button
-              disabled={pending || reading || !rows.length || !department}
+              disabled={
+                pending ||
+                reading ||
+                !rows.length ||
+                (!csvDepartments && !department)
+              }
             >
               {pending
                 ? "กำลังนำเข้า…"

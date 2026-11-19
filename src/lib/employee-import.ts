@@ -2,7 +2,12 @@ import { employeeSchema } from "./domain";
 
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 2000;
-export type ImportEmployee = { code: string; name: string; active: boolean };
+export type ImportEmployee = {
+  code: string;
+  name: string;
+  active: boolean;
+  department_name?: string;
+};
 
 // RFC 4180 fields, including escaped quotes, embedded commas and newlines.
 function csvRows(source: string): string[][] {
@@ -74,6 +79,14 @@ export function parseEmployeeCsv(source: string): ImportEmployee[] {
     const name = keys.includes("name")
       ? get("name")
       : `${get("first_name")} ${get("last_name")}`.trim();
+    const positionKey = keys.includes("position_name")
+      ? "position_name"
+      : keys.includes("position")
+        ? "position"
+        : null;
+    const departmentName = positionKey ? get(positionKey) : undefined;
+    if (positionKey && (!departmentName || departmentName.length > 80))
+      fail("แผนกในคอลัมน์ position_name/position ต้องมีความยาว 1–80 ตัวอักษร");
     const status = get(
       keys.includes("active") ? "active" : "status",
     ).toLowerCase();
@@ -94,6 +107,9 @@ export function parseEmployeeCsv(source: string): ImportEmployee[] {
     if (!parsed.success) fail(parsed.error.issues[0].message);
     if (seen.has(code)) fail(`รหัสพนักงาน ${code} ซ้ำในไฟล์`);
     seen.add(code);
-    return parsed.data!;
+    return {
+      ...parsed.data!,
+      ...(departmentName ? { department_name: departmentName } : {}),
+    };
   });
 }

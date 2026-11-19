@@ -30,10 +30,47 @@ it("validates CSV on the server and imports through the authenticated RPC", asyn
   const response = await POST(request());
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ added: 1, skipped: 0 });
-  expect(m.rpc).toHaveBeenCalledWith("import_employees", {
-    department_id: department,
+  expect(m.rpc).toHaveBeenCalledWith("import_employees_csv", {
+    fallback_department_id: department,
     employees: [{ code: "00123", name: "สมหญิง ใจดี", active: true }],
   });
+});
+it("uses each CSV position as a department without requiring a fallback", async () => {
+  const response = await POST(
+    new Request("https://example.com/api/manage/employees-import", {
+      method: "POST",
+      headers: { origin: "https://example.com" },
+      body: "id,first_name,last_name,position_name,status\n00123,First,Last,HR,active\n00124,Other,Employee,Engineer,inactive",
+    }),
+  );
+  expect(response.status).toBe(200);
+  expect(m.rpc).toHaveBeenCalledWith("import_employees_csv", {
+    fallback_department_id: null,
+    employees: [
+      {
+        code: "00123",
+        name: "First Last",
+        active: true,
+        department_name: "HR",
+      },
+      {
+        code: "00124",
+        name: "Other Employee",
+        active: false,
+        department_name: "Engineer",
+      },
+    ],
+  });
+});
+it("explains the new migration requirement when the RPC is missing", async () => {
+  m.rpc.mockResolvedValue({
+    error: { code: "PGRST202", message: "Missing function" },
+  });
+  const response = await POST(request());
+  expect(response.status).toBe(503);
+  expect((await response.json()).error).toContain(
+    "202611190003_import_employee_positions.sql",
+  );
 });
 it("rejects invalid CSV without writing any rows", async () => {
   expect((await POST(request("code,name\n123,Good\nBAD!,Bad"))).status).toBe(

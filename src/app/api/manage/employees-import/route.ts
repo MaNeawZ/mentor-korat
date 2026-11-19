@@ -15,9 +15,6 @@ export async function POST(request: Request) {
   try {
     checkOrigin(request);
     await apiUser("employees.manage");
-    const departmentId = z
-      .uuid()
-      .parse(new URL(request.url).searchParams.get("department_id"));
     const bytes = await limitedBody(request, MAX_IMPORT_BYTES);
     let employees;
     try {
@@ -32,11 +29,19 @@ export async function POST(request: Request) {
           : (error as Error).message,
       );
     }
+    const departmentId = employees.every((employee) => employee.department_name)
+      ? null
+      : z.uuid().parse(new URL(request.url).searchParams.get("department_id"));
     const db = await sessionClient();
-    const result = await db.rpc("import_employees", {
-      department_id: departmentId,
+    const result = await db.rpc("import_employees_csv", {
+      fallback_department_id: departmentId,
       employees,
     });
+    if (result.error?.code === "PGRST202")
+      throw new HttpError(
+        503,
+        "กรุณาติดตั้ง migration 202611190003_import_employee_positions.sql ใน Supabase SQL Editor ก่อนนำเข้า (EMPLOYEE_IMPORT_NOT_INSTALLED)",
+      );
     check(result);
     return NextResponse.json(result.data);
   } catch (error) {

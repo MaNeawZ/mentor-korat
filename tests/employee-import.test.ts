@@ -15,8 +15,13 @@ describe("employee CSV import", () => {
         "\uFEFFid,position_name,first_name,last_name,nick_name,start_date,created_at,updated_at,status\r\n00123,HR,สมหญิง,ใจดี,เอ,2026-01-01,,,active\r\nOLS456,Engineer,สมชาย,ใจดี,บี,,,,inactive\r\n",
       ),
     ).toEqual([
-      { code: "00123", name: "สมหญิง ใจดี", active: true },
-      { code: "OLS456", name: "สมชาย ใจดี", active: false },
+      { code: "00123", name: "สมหญิง ใจดี", active: true, department_name: "HR" },
+      {
+        code: "OLS456",
+        name: "สมชาย ใจดี",
+        active: false,
+        department_name: "Engineer",
+      },
     ]);
   });
   it("handles escaped quotes, multiline names, commas and blank lines", () => {
@@ -28,6 +33,21 @@ describe("employee CSV import", () => {
       { code: "OLS123", name: 'First, "Nickname"\nLast', active: false },
     ]);
   });
+  it("accepts position as an alias and trims department names", () => {
+    expect(
+      parseEmployeeCsv(
+        'code,name,position\n123,Employee," Software Engineer "',
+      )[0].department_name,
+    ).toBe("Software Engineer");
+  });
+  it.each(["", "x".repeat(81)])(
+    "rejects missing or overlong CSV departments",
+    (position) => {
+      expect(() =>
+        parseEmployeeCsv(`code,name,position_name\n123,Employee,${position}`),
+      ).toThrow(/แผนก/);
+    },
+  );
   it.each([
     ["code,name\n123,Good\n123,Other", /ซ้ำในไฟล์/],
     ["code,name\n123,Good\nBAD-123,Bad", /รายการที่ 2/],

@@ -261,6 +261,132 @@ it("deletes selected employees atomically, preserves leave history and audits de
     [[first, second]],
   );
 });
+it("imports CSV positions as departments, reuses existing departments and rolls back new departments on failure", async () => {
+  await admin();
+  await db.exec("BEGIN");
+  try {
+    await actor(head);
+    const rows = [
+      {
+        code: "POS111",
+        name: "New HR",
+        active: true,
+        department_name: "CSV HR",
+      },
+      {
+        code: "POS222",
+        name: "Another HR",
+        active: false,
+        department_name: " CSV HR ",
+      },
+      {
+        code: "POS333",
+        name: "Developer",
+        active: true,
+        department_name: "Development",
+      },
+      {
+        code: "68364",
+        name: "Existing",
+        active: false,
+        department_name: "Unused position",
+      },
+    ];
+    const result = await db.query<{ result: unknown }>(
+      "SELECT mentor_korat.import_employees_csv($1::jsonb) result",
+      [JSON.stringify(rows)],
+    );
+    expect(result.rows[0].result).toEqual({
+      added: 3,
+      skipped: 1,
+      departments_created: 1,
+    });
+    expect(
+      (
+        await db.query(
+          "SELECT e.code,d.name department,e.active,e.mentor_id FROM mentor_korat.employees e JOIN mentor_korat.departments d ON d.id=e.department_id WHERE e.code LIKE 'POS%' ORDER BY e.code",
+        )
+      ).rows,
+    ).toEqual([
+      { code: "POS111", department: "CSV HR", active: true, mentor_id: null },
+      { code: "POS222", department: "CSV HR", active: false, mentor_id: null },
+      {
+        code: "POS333",
+        department: "Development",
+        active: true,
+        mentor_id: null,
+      },
+    ]);
+    expect(
+      (
+        await db.query(
+          "SELECT id FROM mentor_korat.departments WHERE name='Unused position'",
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await db.query(
+          "SELECT department_id,mentor_id,active FROM mentor_korat.employees WHERE code='68364'",
+        )
+      ).rows,
+    ).toEqual([{ department_id: department, mentor_id: mentor, active: true }]);
+    await actor(mentor);
+    await db.exec("SAVEPOINT denied");
+    await expect(
+      db.query("SELECT mentor_korat.import_employees_csv($1::jsonb)", [
+        JSON.stringify(rows),
+      ]),
+    ).rejects.toThrow(/FORBIDDEN/);
+    await db.exec("ROLLBACK TO SAVEPOINT denied");
+    await actor(head);
+    await db.exec("SAVEPOINT invalid");
+    await expect(
+      db.query("SELECT mentor_korat.import_employees_csv($1::jsonb)", [
+        JSON.stringify([
+          {
+            code: "POS444",
+            name: "Rollback",
+            active: true,
+            department_name: "Rollback department",
+          },
+          {
+            code: "POS555",
+            name: "Invalid",
+            active: true,
+            department_name: "",
+          },
+        ]),
+      ]),
+    ).rejects.toThrow(/INVALID_DEPARTMENT/);
+    await db.exec("ROLLBACK TO SAVEPOINT invalid");
+    expect(
+      (
+        await db.query(
+          "SELECT id FROM mentor_korat.departments WHERE name='Rollback department'",
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await db.query(
+          "SELECT id FROM mentor_korat.employees WHERE code='POS444'",
+        )
+      ).rows,
+    ).toEqual([]);
+    const fallback = await db.query<{ result: { added: number } }>(
+      "SELECT mentor_korat.import_employees_csv($1::jsonb,$2) result",
+      [
+        JSON.stringify([{ code: "POS666", name: "Fallback", active: true }]),
+        department,
+      ],
+    );
+    expect(fallback.rows[0].result.added).toBe(1);
+  } finally {
+    await db.exec("ROLLBACK");
+    await admin();
+  }
+});
 describe("real PostgreSQL transaction and RLS integration (isolated PGlite)", () => {
   it("does not change existing public data", async () => {
     await admin();
