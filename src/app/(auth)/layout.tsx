@@ -1,4 +1,4 @@
-import { Sprout, ShieldCheck, ArrowUpRight } from "lucide-react";
+import { Sprout, CalendarDays, Check, Users } from "lucide-react";
 export const dynamic = "force-dynamic";
 export default function AuthLayout({
   children,
@@ -6,52 +6,62 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="auth-layout">
-      <section className="auth-story">
-        <div className="brand">
-          <span className="brand-mark">
-            <Sprout />
-          </span>
-          <span>
-            KORAT<span className="brand-sub">LEAVE MONITORING</span>
-          </span>
-        </div>
-        <div className="story-copy">
-          <span className="eyebrow">A BETTER WAY TO CARE FOR YOUR TEAM</span>
-          <h1>
-            ทุกการลา
-            <br />
-            ดูแลได้<span>อย่างเข้าใจ.</span>
-          </h1>
-          <p>
-            พื้นที่เดียวสำหรับติดตามใบลา ตรวจสอบหลักฐาน
-            <br />
-            และเชื่อมต่อการดูแลพนักงานกับ Mentor
-          </p>
-          <div className="story-workflow">
-            <span>01 รับข้อมูลจาก LINE</span>
-            <ArrowUpRight />
-            <span>02 ตรวจสอบอย่างเป็นระบบ</span>
-            <ArrowUpRight />
-            <span>03 ส่งต่อให้ทีมที่ดูแล</span>
+    <main className="portal">
+      <div className="portal-haze" aria-hidden="true" />
+      <header className="portal-brand">
+        <span>
+          <Sprout size={24} />
+        </span>
+        KORAT
+        <span className="portal-brand-dot" />
+      </header>
+      <section className="portal-art" aria-hidden="true">
+        <div className="portal-grid" />
+        <div className="portal-scene">
+          <div className="portal-aura" />
+          <div className="portal-orbit portal-orbit-one" />
+          <div className="portal-orbit portal-orbit-two" />
+          <div className="portal-orbit portal-orbit-three" />
+          <div className="portal-core">
+            <Sprout strokeWidth={1.1} />
           </div>
+          <div className="portal-satellite portal-satellite-one">
+            <CalendarDays strokeWidth={1.5} />
+            <span />
+            <span />
+          </div>
+          <div className="portal-satellite portal-satellite-two">
+            <Users strokeWidth={1.5} />
+            <i />
+            <i />
+            <i />
+          </div>
+          <div className="portal-satellite portal-satellite-three">
+            <Check strokeWidth={2} />
+          </div>
+          <div className="portal-particle portal-particle-one" />
+          <div className="portal-particle portal-particle-two" />
+          <div className="portal-particle portal-particle-three" />
         </div>
-        <div className="row muted">
-          <ShieldCheck size={18} /> พื้นที่ทำงานส่วนตัวสำหรับทีมศูนย์โคราช
+        <div className="portal-art-caption">
+          <span />
+          CONNECTED. TOGETHER.
         </div>
-        <div className="story-orb" />
       </section>
-      <section className="auth-form-side">
-        <div className="auth-form-card">
+      <section className="portal-form-side">
+        <div className="auth-form-card portal-card">
+          <div className="portal-card-symbol" aria-hidden="true">
+            <Sprout size={25} strokeWidth={1.5} />
+          </div>
           {children}
-          <div className="auth-note">
-            <ShieldCheck size={15} /> เข้าถึงได้เฉพาะบัญชีที่ได้รับสิทธิ์จากผู้ดูแล
-          </div>
         </div>
-        <small className="auth-copyright">
-          Korat Leave Monitoring · Mentor Management System
-        </small>
       </section>
+      <footer className="portal-footer">
+        <span>LEAVE MONITORING</span>
+        <span>
+          KORAT WORKSPACE <i />
+        </span>
+      </footer>
     </main>
   );
 }

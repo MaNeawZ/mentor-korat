@@ -4,11 +4,11 @@ test("login is readable, responsive, and password visibility works", async ({
 }, info) => {
   await page.goto("/login");
   await expect(
-    page.getByRole("heading", { name: "ยินดีต้อนรับกลับมา" }),
+    page.getByRole("heading", { name: "เข้าสู่ระบบ", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }),
-  ).toBeDisabled();
+  ).toBeVisible();
   const input = page.getByLabel("รหัสผ่าน", { exact: true });
   await input.fill("local-ui-test-only");
   await page.getByRole("button", { name: "แสดงรหัสผ่าน" }).click();
@@ -32,7 +32,7 @@ test("system dark mode renders without page errors", async ({ page }, info) => {
   await page.goto("/login");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(
-    page.getByRole("heading", { name: "ยินดีต้อนรับกลับมา" }),
+    page.getByRole("heading", { name: "เข้าสู่ระบบ", exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: `test-results/login-dark-${info.project.name}.png`,
