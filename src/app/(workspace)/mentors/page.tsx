@@ -22,6 +22,9 @@ export default async function Mentors() {
         title="Mentor และการมอบหมาย"
         description="กระจายการดูแลให้เหมาะสม และติดตามจำนวนพนักงานในความรับผิดชอบ"
       >
+        <Link className="btn btn-outline" href="/org-chart">
+          ดู Org chart
+        </Link>
         <Link className="btn btn-primary" href="/employees">
           มอบหมายพนักงาน
           <ArrowUpRight size={16} />

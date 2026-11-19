@@ -16,15 +16,18 @@ import {
   Sprout,
   Bell,
   UserRoundCheck,
+  Network,
 } from "lucide-react";
 import { NotificationBell } from "./live";
 import { ThemeToggle } from "./theme-toggle";
 import { can, type Profile, type Permission } from "@/lib/domain";
+import { orgChartPermissions } from "@/lib/org-chart";
 const nav: {
   href: string;
   label: string;
   icon: typeof Files;
   permission?: Permission;
+  anyPermission?: Permission[];
 }[] = [
   { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
   { href: "/leaves", label: "รายการใบลา", icon: Files },
@@ -36,6 +39,12 @@ const nav: {
     permission: "evidence.final_review",
   },
   { href: "/employees", label: "พนักงาน", icon: Users },
+  {
+    href: "/org-chart",
+    label: "โครงสร้างทีม",
+    icon: Network,
+    anyPermission: orgChartPermissions,
+  },
   {
     href: "/mentors",
     label: "Mentor และการมอบหมาย",
@@ -102,7 +111,12 @@ export function Shell({
         <div className="nav-label">WORKSPACE</div>
         <nav>
           {nav
-            .filter((n) => !n.permission || can(user, n.permission))
+            .filter(
+              (n) =>
+                (!n.permission || can(user, n.permission)) &&
+                (!n.anyPermission ||
+                  n.anyPermission.some((permission) => can(user, permission))),
+            )
             .map((n) => (
               <Link
                 onClick={() => setMenu(false)}

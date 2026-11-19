@@ -154,6 +154,14 @@ npm.cmd audit --omit=dev
 
 ติดตั้ง migration `202611190002_delete_employees.sql` หรือ SQL Editor bundle ฉบับล่าสุดก่อนใช้
 
+## โครงสร้างทีม (Org chart)
+
+เปิดเมนู **โครงสร้างทีม** หรือ **Mentor และการมอบหมาย → ดู Org chart** แสดงหัวหน้าศูนย์และ HR เป็นชั้นดูแลร่วมกัน ตามด้วย Mentor และพนักงานที่ผูกกับ Mentor จริง พร้อมรหัสและแผนก ค้นหาชื่อ รหัส แผนก หรือชื่อ Mentor และยุบ/ขยายสมาชิกได้ แสดงเฉพาะพนักงานใช้งานเป็นค่าเริ่มต้น เปิด **รวมผู้ที่ปิดใช้งาน** เพื่อดูเพิ่มเติม Mentor ที่ปิดใช้งานแต่ยังมีพนักงานจะมีข้อความเตือน พนักงานที่ไม่มี Mentor หรือผู้ดูแลเปลี่ยนบทบาทแสดงแยกในส่วนรอมอบหมาย/ตรวจสอบ
+
+ผู้มีสิทธิ์ `employees.manage`, `mentors.assign` หรือ `leaves.view_all` เห็นทุกทีม ส่วนผู้มีเพียง `leaves.view_assigned` เห็นเฉพาะพนักงานที่มอบหมายให้ตนและชั้นหัวหน้าศูนย์/HR ตรวจสิทธิ์ซ้ำในฐานข้อมูลผ่าน RPC โดยไม่ส่งข้อมูลทีมอื่นไปยัง browser ไม่ได้กำหนดหัวหน้าส่วนตัวให้ Mentor แต่ละคน เพราะข้อมูลปัจจุบันเก็บเพียงบทบาทผู้ใช้งาน
+
+ติดตั้ง migration `202611190004_org_chart.sql` หรือรัน SQL Editor bundle ฉบับล่าสุดก่อนใช้งาน
+
 ## External scheduler
 
 ไม่มี cron ใน Vercel config แล้ว เมื่อรับข้อความ LINE จะบันทึก event อย่างทนทาน จากนั้นอ่านข้อมูลและเรียก transaction สร้างใบลา/แจ้งเตือนเว็บ/Discord outbox ก่อนตอบ LINE (fast path ไม่เกิน 5 events และมี budget 1.5 วินาที ไม่ใช่ latency ที่รับประกัน) Discord ส่งต่อทันทีหลัง response ผ่าน Next.js after() งานที่ช้าหรือขัดข้องยังอยู่ในคิวและมี GitHub schedule เป็น fallback: ตั้ง GitHub repository secrets `WORKER_BASE_URL` และ `CRON_SECRET` (ตรงกับ Vercel) รอบ fallback ทุก 5 นาทีเปิดเป็นค่าเริ่มต้น ไม่ต้องกด Re-run; push เปลี่ยน workflow/caller script บน main จะเรียกหนึ่งรอบ ตั้ง repository variable `WORKER_SCHEDULER_ENABLED=false` เมื่อต้องการหยุด fallback GitHub schedule อาจล่าช้าได้ รายละเอียดอยู่ใน DEPLOYMENT.md

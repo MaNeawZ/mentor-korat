@@ -387,6 +387,51 @@ it("imports CSV positions as departments, reuses existing departments and rolls 
     await admin();
   }
 });
+it("returns the full org chart to leadership and only the assigned branch to a Mentor", async () => {
+  await actor(head);
+  const readChart = async () =>
+    (
+      await db.query<{
+        chart: {
+          scoped: boolean;
+          people: { id: string; role: string }[];
+          employees: { id: string }[];
+        };
+      }>("SELECT mentor_korat.org_chart() chart")
+    ).rows[0].chart;
+  const all = await readChart();
+  expect(all.scoped).toBe(false);
+  expect(all.people.map((person) => person.id)).toEqual(
+    expect.arrayContaining([head, hr, mentor, other]),
+  );
+  expect(all.employees.map((employee) => employee.id)).toContain(employee);
+  await actor(hr);
+  expect((await readChart()).scoped).toBe(false);
+  await actor(mentor);
+  const own = await readChart();
+  expect(own.scoped).toBe(true);
+  expect(
+    own.people
+      .filter((person) => person.role === "MENTOR")
+      .map((person) => person.id),
+  ).toEqual([mentor]);
+  expect(own.employees.map((employee) => employee.id)).toEqual([employee]);
+  await actor(other);
+  expect((await readChart()).employees).toEqual([]);
+  await admin();
+  await db.exec("BEGIN");
+  try {
+    await db.query(
+      "UPDATE mentor_korat.app_users SET active=false WHERE id=$1",
+      [mentor],
+    );
+    await actor(mentor);
+    await expect(readChart()).rejects.toThrow(/FORBIDDEN/);
+  } finally {
+    await db.exec("ROLLBACK");
+    await admin();
+  }
+});
 describe("real PostgreSQL transaction and RLS integration (isolated PGlite)", () => {
   it("does not change existing public data", async () => {
     await admin();
